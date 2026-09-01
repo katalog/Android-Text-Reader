@@ -1,5 +1,8 @@
 package com.moonkata.textreader.ui.reader
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -13,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moonkata.textreader.ui.theme.ReaderColors
@@ -28,24 +32,28 @@ fun ReaderTopBar(
     onSettings: () -> Unit,
 ) {
     Surface(color = readerColors.background, contentColor = readerColors.text, shadowElevation = 4.dp) {
-        TopAppBar(
-            title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-                }
-            },
-            actions = {
+        Column {
+            TopAppBar(
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "설정") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = readerColors.background,
+                    titleContentColor = readerColors.text,
+                    navigationIconContentColor = readerColors.text,
+                    actionIconContentColor = readerColors.text,
+                ),
+            )
+            Row(Modifier.padding(horizontal = 4.dp)) {
                 IconButton(onClick = onToc) { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "목차") }
                 IconButton(onClick = onSearch) { Icon(Icons.Default.Search, contentDescription = "검색") }
-                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "설정") }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = readerColors.background,
-                titleContentColor = readerColors.text,
-                navigationIconContentColor = readerColors.text,
-                actionIconContentColor = readerColors.text,
-            ),
-        )
+            }
+        }
     }
 }
