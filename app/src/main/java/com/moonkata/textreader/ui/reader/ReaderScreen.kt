@@ -261,19 +261,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                     onToggleChapterJump = { viewModel.setChapterJumpEnabled(!settings.chapterJumpEnabled) },
                 )
             }
-            AnimatedVisibility(
-                visible = showChrome,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
-                ReaderBottomBar(
-                    progress = progress,
-                    readerColors = readerColors,
-                )
-            }
-
-            // 오버레이(상/하단바)가 숨겨져 있을 때도 읽은 비율을 놓치지 않도록 기본 화면에 항상 떠 있는 작은 표시.
+            // 상단바가 숨겨져 있을 때도 읽은 비율을 놓치지 않도록 기본 화면에 항상 떠 있는 작은 표시.
             // 배경 없이 반투명 텍스트만 놓으면 마침 그 자리에 있는 본문 마지막 줄과 겹쳐 보여
             // "줄이 잘린 것처럼" 보이므로, 알약 모양 배경을 깔아 본문과 확실히 분리해 보이게 한다.
             if (!showChrome) {
