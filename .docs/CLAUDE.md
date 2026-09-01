@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **문카타 리더 (Moonkata Reader)** — 로컬 `.txt` 소설을 읽기 위한 완전 오프라인 단일 사용자 안드로이드 앱.
 서버/로그인/동기화 없음. Kotlin + Jetpack Compose, 수동 MVVM(`AndroidViewModel` + Repository), DI 프레임워크 없음.
 
-자세한 기능 목록과 설계 배경은 [README.md](README.md)(한글) 참고. 백로그는 [IDEAS.md](IDEAS.md).
+자세한 기능 목록과 설계 배경은 [README.md](../README.md)(한글) 참고. 백로그는 [IDEAS.md](IDEAS.md).
 
 ## 빌드 & 테스트 명령어
 
@@ -50,7 +50,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **읽기 위치는 페이지 번호가 아니라 전체 텍스트 내 "문자 오프셋"으로 저장한다.** 폰트 크기/여백/화면 크기가 바뀌면 페이지 나누기 자체가 달라지므로, 페이지 인덱스는 항상 파생값으로 취급하고 Room(`BookEntity`)에는 오프셋만 저장한다.
 
-**페이지 모드(`Paginator`, [Paginator.kt](app/src/main/java/com/moonkata/textreader/data/parser/Paginator.kt))는 책 전체를 미리 페이지네이션하지 않는다.** 지금 보여줄 페이지 하나(문자 오프셋 구간)만 그때그때 계산:
+**페이지 모드(`Paginator`, [Paginator.kt](../app/src/main/java/com/moonkata/textreader/data/parser/Paginator.kt))는 책 전체를 미리 페이지네이션하지 않는다.** 지금 보여줄 페이지 하나(문자 오프셋 구간)만 그때그때 계산:
 - 다음 페이지: 현재 페이지 끝 오프셋부터 한 페이지만 새로 측정 (`paginateFrom`)
 - 이전 페이지: 정방향으로 넘기며 쌓은 방문 이력 스택을 되짚어 쓰거나, 이력이 없을 때만(예: 검색 점프 직후) `onePageEndingAt`으로 역산 추정
 - 페이지 경계 측정은 문단별로 따로 재는 게 아니라 후보 텍스트 구간 전체를 하나의 `TextMeasurer.measure` 호출로 측정 — `ReaderPagerContent`가 실제로 페이지 전체를 하나의 `Text`로 그리기 때문에 문단별 높이 합산은 실제 렌더링과 어긋날 수 있음
@@ -79,4 +79,4 @@ data/
 `ui/reader/*Sheet.kt`(QuickSettingsSheet, TocSheet, SearchSheet, FontPickerSheet, ChapterPatternSheet)는 각각 `ModalBottomSheet` 하나씩 — `shouldDismissOnBackPress = false`로 두는 이유는 TESTING.md의 "의도적으로 제외" 항목 참고(Compose Material3의 알려진 제약, 우리 쪽 버그 아님).
 
 ### 의존성 관리
-버전은 [gradle/libs.versions.toml](gradle/libs.versions.toml)의 버전 카탈로그에서 관리. 새 의존성 추가 시 `[versions]`/`[libraries]`에 등록 후 `app/build.gradle.kts`에서 `libs.xxx`로 참조.
+버전은 [gradle/libs.versions.toml](../gradle/libs.versions.toml)의 버전 카탈로그에서 관리. 새 의존성 추가 시 `[versions]`/`[libraries]`에 등록 후 `app/build.gradle.kts`에서 `libs.xxx`로 참조.

@@ -2,7 +2,7 @@
 
 `app/src/androidTest`(계측/Compose UI)와 `app/src/test`(순수 로직, 일반 JUnit)에 있는 테스트의 전체
 계획과 현재 상태를 기록하는 문서. 진행하면서 계속 업데이트합니다.
-(기능 백로그는 [`IDEAS.md`](IDEAS.md), 앱 소개/설계는 [`README.md`](README.md) 참고)
+(기능 백로그는 [`IDEAS.md`](IDEAS.md), 앱 소개/설계는 [`README.md`](../README.md) 참고)
 
 ## 어디에 테스트를 두나
 

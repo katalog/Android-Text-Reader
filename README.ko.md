@@ -1,4 +1,4 @@
-<img src="docs/app_icon.png" alt="문카타 리더 앱 아이콘" width="96" height="96">
+<img src=".docs/app_icon.png" alt="문카타 리더 앱 아이콘" width="96" height="96">
 
 # 문카타 리더 (Moonkata Reader)
 
@@ -106,7 +106,7 @@ com.moonkata.textreader/
 └── util/                         — SAF/컬렉션 확장 함수
 ```
 
-각 기능을 어떤 파일이 담당하고 구체적으로 어떻게 구현했는지는 [`docs/FEATURES.md`](docs/FEATURES.md)에 파일 단위로 정리해 두었습니다.
+각 기능을 어떤 파일이 담당하고 구체적으로 어떻게 구현했는지는 [`docs/FEATURES.md`](.docs/FEATURES.md)에 파일 단위로 정리해 두었습니다.
 
 ## 테스트
 
@@ -125,7 +125,7 @@ Android 런타임(Context, Room, DataStore, Compose, `TextMeasurer`) 필요 여�
   동작은 의도적으로 범위에서 제외하고 수동 확인으로 남겨둡니다 — 통과해도 실제 회귀를 못 잡는 테스트를
   굳이 만들지 않았습니다.
 
-전체 계획과 각 테스트가 뭘 검증하는지는 [`TESTING.md`](TESTING.md)에 단계별로 기록해뒀습니다.
+전체 계획과 각 테스트가 뭘 검증하는지는 [`TESTING.md`](.docs/TESTING.md)에 단계별로 기록해뒀습니다.
 
 ## 빌드 & 실행
 
@@ -141,7 +141,7 @@ cd android-text-reader
 
 ## 앞으로 추가하고 싶은 것
 
-향후 추가 아이디어는 [`IDEAS.md`](IDEAS.md)에 정리해두었습니다.
+향후 추가 아이디어는 [`IDEAS.md`](.docs/IDEAS.md)에 정리해두었습니다.
 
 ## 라이선스
 

@@ -1,4 +1,4 @@
-<img src="docs/app_icon.png" alt="Moonkata Reader app icon" width="96" height="96">
+<img src=".docs/app_icon.png" alt="Moonkata Reader app icon" width="96" height="96">
 
 # Moonkata Reader (문카타 리더)
 
@@ -89,7 +89,7 @@ com.moonkata.textreader/
 └── util/                         — SAF / collection extension functions
 ```
 
-A file-by-file breakdown of exactly which files implement which feature, and how, lives in [`docs/FEATURES.md`](docs/FEATURES.md).
+A file-by-file breakdown of exactly which files implement which feature, and how, lives in [`docs/FEATURES.md`](.docs/FEATURES.md).
 
 ## Testing
 
@@ -100,7 +100,7 @@ Tests are split into two source sets based on whether they need the Android runt
 - Font downloads are covered both by `MockWebServer`-based tests (success/failure logic against a fake local server) and by real-network tests that confirm the actual OFL font sources (GitHub, etc.) are still reachable and that applying a downloaded font actually changes the viewer — this real-network suite has already caught three font source URLs that had silently broken.
 - Platform behavior that Compose's semantics tree can't reliably assert on (IME visibility, real timer/TTS timing) is deliberately left out of the automated suite and verified manually — a test that passes without catching real regressions isn't worth writing.
 
-The full test plan, what each test is meant to verify, and what was deliberately left out, is tracked step by step in [`TESTING.md`](TESTING.md).
+The full test plan, what each test is meant to verify, and what was deliberately left out, is tracked step by step in [`TESTING.md`](.docs/TESTING.md).
 
 ## Build & run
 
@@ -116,7 +116,7 @@ cd android-text-reader
 
 ## Roadmap
 
-Future ideas are tracked in [`IDEAS.md`](IDEAS.md).
+Future ideas are tracked in [`IDEAS.md`](.docs/IDEAS.md).
 
 ## License
 
