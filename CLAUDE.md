@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `compileSdk`/`targetSdk` 36, `minSdk` 24, Java 11, Kotlin 2.2.0.
 - `RealFontDownloadIntegrationTest`, `FontApplyRepaginatesViewerTest`(androidTest)는 실제 인터넷 연결이 필요한 실 네트워크 테스트 — 오프라인이거나 폰트 배포처 URL이 깨지면 실패하는 게 의도된 동작.
-- Phase 3(`PageNavigationRoundTripTest` 등)과 챕터 인식 회귀 테스트는 `app/src/androidTest/assets/books/`의 실제 소설 픽스처(로컬 전용, gitignore됨)가 필요하며, 없으면 `Assume`으로 자동 스킵됨.
+- Phase 3(`PageNavigationRoundTripTest` 등)과 챕터 인식 회귀 테스트는 `app/src/androidTest/assets/books/`에 커밋된 퍼블릭 도메인 소설 픽스처(이광수 「무정」/「흙」, Gutenberg의 「Moby-Dick」/「Dracula」)를 사용하며, 혹시라도 없는 환경에서는 `Assume`으로 자동 스킵됨.
 
 ## 테스트를 어디에 둘지 결정하는 기준
 

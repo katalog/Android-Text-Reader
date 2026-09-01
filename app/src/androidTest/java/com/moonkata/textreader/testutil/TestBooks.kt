@@ -10,15 +10,15 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * `app/src/androidTest/assets/books/`에 로컬로 넣어둔 실제 소설 픽스처(저작권/용량 문제로 gitignore되어
- * 다른 개발자 PC나 CI에는 없을 수 있음)를 테스트에서 쓸 수 있게 캐시 파일로 복사한다.
+ * `app/src/androidTest/assets/books/`에 커밋되어 있는 퍼블릭 도메인 소설 픽스처(이광수 「무정」/「흙」,
+ * Project Gutenberg의 「Moby-Dick」/「Dracula」)를 테스트에서 쓸 수 있게 캐시 파일로 복사한다.
  *
  * asset은 `AssetManager` 스트림으로만 읽히는데 `BookSource.PlainTxt`는 실제 `Uri`가 필요해서, 복사한
  * 캐시 파일의 `file://` URI를 대신 쓴다 — `ContentResolver`는 SAF 권한 없이도 file:// URI를 그대로 읽는다.
  */
 object TestBooks {
 
-    /** assets/books/ 밑의 상대 경로(예: "Static.txt")를 캐시 파일로 복사해 그 File을 반환한다. */
+    /** assets/books/ 밑의 상대 경로(예: "Heuk.txt")를 캐시 파일로 복사해 그 File을 반환한다. */
     fun copyToCache(applicationContext: Context, assetName: String): File {
         val instrumentationContext = InstrumentationRegistry.getInstrumentation().context
         val target = File(File(applicationContext.cacheDir, "test_books"), assetName)

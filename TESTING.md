@@ -29,9 +29,9 @@
 
 ## 공용 테스트 인프라
 
-- `testutil/TestBooks.kt` — `androidTest/assets/books/`의 실제 소설 픽스처(로컬 전용, gitignore됨)를
-  캐시 파일로 복사해 `file://` URI로 접근 가능하게 하고, 인메모리 Room에 `BookEntity`로 등록. 픽스처가
-  없는 환경(다른 개발자 PC, CI)에서는 `Assume`으로 테스트를 스킵 처리.
+- `testutil/TestBooks.kt` — `androidTest/assets/books/`에 커밋된 퍼블릭 도메인 소설 픽스처를 캐시
+  파일로 복사해 `file://` URI로 접근 가능하게 하고, 인메모리 Room에 `BookEntity`로 등록. 픽스처가 없는
+  환경(sparse checkout 등)에서도 안전하도록 `Assume`으로 테스트를 스킵 처리하는 방어 로직은 남겨둠.
 - `testutil/TestTextMeasurer.kt` — Compose 렌더링 없이도 진짜 텍스트 측정이 되는 `TextMeasurer`를
   직접 생성 — `ReaderViewModel`/`Paginator`를 전체 화면 없이 빠르게 검증할 때 사용.
 - `ui/library/FakeFolderBrowser.kt` — 실제 SAF 권한 없이 미리 정해둔 폴더 목록을 돌려주는 테스트 더블
@@ -53,12 +53,23 @@
 쓴다 — `ReaderViewModel`을 직접 구동하는 새 테스트를 추가할 때, 그 테스트가 건드리는 내비게이션 경로에
 영향을 주는 설정이 있는지 먼저 따져보고 같은 패턴을 따를 것.
 
-## 픽스처 조사 결과 (2026-08-27 기준)
+## 픽스처 (2026-09-01 기준 — 퍼블릭 도메인으로 교체)
 
-`androidTest/assets/books/`의 소설 8개 전부 UTF-8. 챕터 표기는 7개가 `## 제N장` 형식(현재 기본
-프리셋과 일치), `Yellow Radio.txt` 하나만 `##` 없이 `제N장`만 있어 현재 프리셋으로는 챕터가 안
-잡힘 — 이건 "목차 없음"이 정상 동작임을 검증하는 좋은 실사례로 씀. EUC-KR 픽스처는 없어서 인코딩
-감지 테스트는 합성 데이터를 따로 만들어야 함.
+`androidTest/assets/books/`는 원래 저작권이 있는 번역 웹소설로 채워져 있어 로컬 전용으로 gitignore
+해뒀었는데, 공개 저장소로 옮기면서 전부 퍼블릭 도메인 소설로 교체하고 커밋했다. 전부 UTF-8, 4개:
+
+- `Heuk.txt` — 이광수 「흙」(1932, 저자 사후 70년 경과로 한국 저작권 만료), [한국어 위키문헌](https://ko.wikisource.org/wiki/흙) 원문. 실제 장 구분(제1장~제5장)을 살려 각 장
+  시작에 `## 제N장` 헤더를 넣어둠 — 기본 챕터 인식 프리셋(`##`로 시작)과 맞아떨어지는 정탐 케이스이자,
+  대부분의 테스트가 쓰는 범용 대용량 픽스처.
+- `Mujeong.txt` — 이광수 「무정」(1917, 마찬가지로 저작권 만료), [한국어 위키문헌](https://ko.wikisource.org/wiki/무정) 원문. `##` 헤더가 전혀 없는 연속 산문이라
+  "챕터 없음"이 정상 동작임을 검증하는 좋은 사례로 씀(예전 `Yellow Radio.txt`의 역할).
+- `MobyDick.txt` — Herman Melville, 『Moby-Dick』([Project Gutenberg #2701](https://www.gutenberg.org/ebooks/2701), 라이선스 boilerplate는
+  제거하고 본문만 남김).
+- `Dracula.txt` — Bram Stoker, 『Dracula』([Project Gutenberg #345](https://www.gutenberg.org/ebooks/345), 마찬가지로 본문만).
+
+EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 따로 만들어야 함(→ `EncodingDetectorTest`).
+영어 픽스처 2개는 현재 어떤 테스트에서도 아직 안 쓰고 있음 — 다국어 페이지네이션/리플로우 검증용으로
+비축.
 
 ## 페이즈
 
@@ -80,8 +91,8 @@
     (일반 유닛) `EncodingDetectorTest` — EUC-KR/ASCII/UTF-8 합성 바이트 + 빈 입력, Android 의존성이
     없어 분리함
 - [x] **Phase 5 — 챕터/목차/검색**
-  - 챕터 자동 인식: (androidTest) `ChapterDetectionRegressionTest` — 정탐(`Static.txt`, `## ` 프리셋)
-    + `Yellow Radio.txt`의 "챕터 없음" 정상 처리(오탐 없음), 실제 픽스처 기반이라 Context 필요.
+  - 챕터 자동 인식: (androidTest) `ChapterDetectionRegressionTest` — 정탐(`Heuk.txt`, `## ` 프리셋)
+    + `Mujeong.txt`의 "챕터 없음" 정상 처리(오탐 없음), 실제 픽스처 기반이라 Context 필요.
     (일반 유닛) `ChapterDetectorEdgeCaseTest` — 합성 문자열로 `\r\n` 처리, 마지막 줄(줄바꿈 없음),
     60자 초과 줄 제외, 오프셋이 trim 전 원본 줄 시작을 가리키는지, 잘못된 커스텀 정규식이 조용히
     걸러지는지, 겹치는 패턴이 중복 집계되지 않는지 등 세부 분기 검증

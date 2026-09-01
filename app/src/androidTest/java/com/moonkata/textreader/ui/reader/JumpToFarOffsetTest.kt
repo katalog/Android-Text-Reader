@@ -51,7 +51,7 @@ class JumpToFarOffsetTest {
 
             val fullText = viewModel.uiState.value.fullText
             val halfway = fullText.length / 2
-            val marker = "제106장"
+            val marker = "## 제5장"
             val targetOffset = fullText.indexOf(marker, startIndex = halfway)
             check(targetOffset >= 0) { "테스트용 마커(\"$marker\")를 책 후반부에서 못 찾음 — 픽스처가 바뀌었을 수 있음" }
 
@@ -73,6 +73,6 @@ class JumpToFarOffsetTest {
     }
 
     companion object {
-        private const val BOOK_ASSET = "Static.txt"
+        private const val BOOK_ASSET = "Heuk.txt"
     }
 }

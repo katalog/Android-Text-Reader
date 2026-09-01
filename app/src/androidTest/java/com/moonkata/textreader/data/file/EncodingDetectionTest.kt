@@ -17,7 +17,7 @@ class EncodingDetectionTest {
 
     @Test
     fun detectsUtf8OnARealFixtureNovel() {
-        val bookAsset = "Static.txt"
+        val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
         val file = TestBooks.copyToCache(application, bookAsset)

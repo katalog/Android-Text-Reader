@@ -37,7 +37,7 @@ class QuickSettingsSheetTest {
 
     @Test
     fun changingFontMarginThemeAndTransition_updatesUiAndPersistsToDataStore() {
-        val bookAsset = "Static.txt"
+        val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)

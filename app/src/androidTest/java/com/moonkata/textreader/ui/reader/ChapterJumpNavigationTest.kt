@@ -28,7 +28,7 @@ class ChapterJumpNavigationTest {
 
     @Test
     fun next_stepsThroughEqualDivisionsOfEachChapter_andPreviousRetracesThem() {
-        val bookAsset = "Static.txt"
+        val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)

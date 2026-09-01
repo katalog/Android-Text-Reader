@@ -103,7 +103,7 @@ class PageNavigationRoundTripTest {
     }
 
     companion object {
-        private const val BOOK_ASSET = "Static.txt"
+        private const val BOOK_ASSET = "Heuk.txt"
 
         fun testParams() = PaginationParams(
             fontFamily = FontFamily.Default,

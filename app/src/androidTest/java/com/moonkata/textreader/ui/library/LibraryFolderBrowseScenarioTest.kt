@@ -47,7 +47,7 @@ class LibraryFolderBrowseScenarioTest {
 
     @Test
     fun selectingFakeFolder_showsTxtFile_openingItLoadsRealNovelInReader() {
-        val bookAsset = "Static.txt"
+        val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
 
         val testDb = Room.inMemoryDatabaseBuilder(application, AppDatabase::class.java).build()

@@ -14,6 +14,7 @@ import com.moonkata.textreader.testutil.TestTextMeasurer
 import com.moonkata.textreader.testutil.waitUntilTrue
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,7 +22,7 @@ import org.junit.runner.RunWith
 
 /**
  * 챕터 탐지(전체 텍스트 줄 단위 정규식 스캔, 대용량 소설일수록 오래 걸림)가 첫 페이지 표시를 막지
- * 않는지 실제 대용량 픽스처(`Static.txt`, 50개 이상의 챕터)로 검증한다. `loadBook()`이 다시 챕터
+ * 않는지 실제 대용량 픽스처(`Heuk.txt`, 5개 챕터)로 검증한다. `loadBook()`이 다시 챕터
  * 탐지까지 끝나야 `isLoading`을 끄는 예전 방식으로 회귀하면, 그 순간 챕터가 이미 다 채워져 있게 되어
  * 이 테스트가 실패한다.
  */
@@ -79,9 +80,10 @@ class InitialLoadNotBlockedByChapterDetectionTest {
 
             // 챕터 탐지는 백그라운드에서 계속 진행되어 나중에 정상적으로 채워져야 한다(회귀 방지).
             waitUntilTrue(timeoutMs = 10_000) { viewModel.uiState.value.chapters.isNotEmpty() }
-            assertTrue(
-                "\"## \"로 시작하는 챕터가 여러 개 잡혀야 함(ChapterDetectionRegressionTest와 동일 기대치)",
-                viewModel.uiState.value.chapters.size > 50,
+            assertEquals(
+                "\"## \"로 시작하는 챕터가 원문의 장 수만큼 잡혀야 함(ChapterDetectionRegressionTest와 동일 기대치)",
+                5,
+                viewModel.uiState.value.chapters.size,
             )
         } finally {
             runBlocking {
@@ -94,6 +96,6 @@ class InitialLoadNotBlockedByChapterDetectionTest {
     }
 
     companion object {
-        private const val BOOK_ASSET = "Static.txt"
+        private const val BOOK_ASSET = "Heuk.txt"
     }
 }

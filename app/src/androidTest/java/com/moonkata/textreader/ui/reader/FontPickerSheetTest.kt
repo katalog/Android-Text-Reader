@@ -38,7 +38,7 @@ class FontPickerSheetTest {
 
     @Test
     fun tappingADownloadedFont_selectsItInTheViewModel() {
-        val bookAsset = "Static.txt"
+        val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
