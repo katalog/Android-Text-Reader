@@ -1,6 +1,7 @@
 package com.moonkata.textreader.ui.reader
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.ui.text.TextMeasurer
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -27,9 +28,11 @@ import com.moonkata.textreader.data.parser.ChapterJumpNavigator
 import com.moonkata.textreader.data.parser.PaginationParams
 import com.moonkata.textreader.data.parser.Paginator
 import com.moonkata.textreader.data.parser.TextReflower
+import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.repository.BookRepository
 import com.moonkata.textreader.data.sync.ReadingPositionSyncClient
 import com.moonkata.textreader.data.sync.SupabaseConfig
+import com.moonkata.textreader.data.sync.relativePathFromSafDocumentUri
 import com.moonkata.textreader.model.Chapter
 import com.moonkata.textreader.model.PageBreak
 import com.moonkata.textreader.model.Paragraph
@@ -146,7 +149,8 @@ class ReaderViewModel(
     private fun loadBook() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val book = bookRepository.observeBook(bookId).first() ?: return@launch
+            var book = bookRepository.observeBook(bookId).first() ?: return@launch
+            book = backfillRelativePathIfNeeded(book)
             val result = bookRepository.openBookContent(book)
             val settings = _uiState.value.settings
             val paragraphs = withContext(Dispatchers.Default) {
@@ -166,7 +170,9 @@ class ReaderViewModel(
             // 챕터 탐지(전체 텍스트 줄 단위 정규식 스캔)는 첫 페이지 표시에 필요 없다 —
             // 로딩 게이트에서 빼서 백그라운드로 돌리고, 끝나는 대로 chapters만 나중에 채운다.
             redetectChapters(settings)
-            checkExternalFurtherPositionNow()
+            // state.book이 아니라 방금 백필까지 마친 book을 직접 써야 한다 — observeBook Flow가 새
+            // relativePath를 _uiState에 반영하기 전에 이 체크가 먼저 돌 수 있어서(타이밍 레이스).
+            checkRemoteAndMaybeNotify(book.relativePath, book.lastReadCharOffset, settings)
         }
     }
 
@@ -178,14 +184,36 @@ class ReaderViewModel(
     private fun checkExternalFurtherPositionNow() {
         val state = _uiState.value
         val book = state.book
-        if (state.isLoading || book == null || book.relativePath.isEmpty()) return
-        val client = syncClientOrNull(state.settings) ?: return
+        if (state.isLoading || book == null) return
+        checkRemoteAndMaybeNotify(book.relativePath, state.currentOffset, state.settings)
+    }
+
+    private fun checkRemoteAndMaybeNotify(relativePath: String, localOffset: Int, settings: ReaderSettings) {
+        if (relativePath.isEmpty()) return
+        val client = syncClientOrNull(settings) ?: return
         viewModelScope.launch {
-            val remote = client.fetch(book.relativePath) ?: return@launch
+            val remote = client.fetch(relativePath) ?: return@launch
             if (remote.charOffset > _uiState.value.currentOffset) {
                 _uiState.update { it.copy(externalFurtherOffset = remote.charOffset) }
             }
         }
+    }
+
+    /**
+     * `LibraryViewModel`이 폴더 브라우징 중(BrowseLocation 스택)에만 relativePath를 계산해서 넘기는데,
+     * "이어서 읽기" 다이얼로그로 열거나 이미 등록된 책을 다시 여는 경로는 그 스택을 안 거쳐서
+     * relativePath가 계속 비어있게 되는 문제가 실사용 중 확인됐다 — "니치한 재방문"이라 여겼던
+     * §열린 질문 6의 전제와 달리 "이어서 읽기"가 오히려 제일 흔한 진입 경로였다. 책을 열 때마다
+     * relativePath가 비어있으면 SAF 문서 URI에서 역산하는 폴백으로 채운다(RelativePath.kt 참고).
+     */
+    private suspend fun backfillRelativePathIfNeeded(book: BookEntity): BookEntity {
+        if (book.relativePath.isNotEmpty()) return book
+        val source = BookSource.fromStoredString(book.documentUri)
+        if (source !is BookSource.PlainTxt) return book
+        val treeUriString = settingsRepository.settingsFlow.first().lastUsedSafTreeUri ?: return book
+        val relativePath = relativePathFromSafDocumentUri(source.uri, Uri.parse(treeUriString)) ?: return book
+        bookRepository.updateRelativePath(bookId, relativePath)
+        return book.copy(relativePath = relativePath)
     }
 
     /** 리더 화면이 다시 화면에 보이게 됐을 때(화면 켜짐, 다른 앱에서 복귀 등) 호출 — ON_START에 연결. */

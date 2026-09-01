@@ -1,5 +1,7 @@
 package com.moonkata.textreader.data.sync
 
+import android.net.Uri
+import android.provider.DocumentsContract
 import java.text.Normalizer
 
 /**
@@ -9,4 +11,27 @@ import java.text.Normalizer
 fun normalizeRelativePath(rawSegments: List<String>): String {
     val joined = rawSegments.joinToString("/")
     return Normalizer.normalize(joined.replace('\\', '/'), Normalizer.Form.NFC).lowercase()
+}
+
+/**
+ * `LibraryViewModel`이 폴더 브라우징 중(BrowseLocation 스택)에만 relativePath를 계산해서 넘기는데,
+ * "이어서 읽기" 다이얼로그나 이미 등록된 책을 다시 로드하는 경로는 그 스택을 안 거쳐서 relativePath가
+ * 계속 비어있게 되는 문제가 실사용 중 확인됐다(§열린 질문 6 후속 — "니치한 재방문"이라던 가정과 달리
+ * "이어서 읽기"가 오히려 제일 흔한 진입 경로였음). SAF 문서 URI의 documentId 문자열이 보통
+ * "primary:폴더/하위폴더/파일.txt" 형태로 계층적이라는 점을 이용해, 저장해둔 트리 루트의 documentId를
+ * 접두사로 잘라내는 방식으로 relativePath를 역산하는 폴백 — 문서 제공자가 계층적 ID를 쓴다는 가정에
+ * 기대는 휴리스틱이라(로컬 스토리지 제공자는 대체로 성립) 100% 보장은 아니지만, 실패해도 null을 돌려줄
+ * 뿐 기존 동작에 영향은 없다.
+ */
+fun relativePathFromSafDocumentUri(documentUri: Uri, treeUri: Uri): String? {
+    return try {
+        val documentId = DocumentsContract.getDocumentId(documentUri)
+        val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+        if (!documentId.startsWith(treeDocumentId)) return null
+        val relative = documentId.removePrefix(treeDocumentId).trimStart('/')
+        if (relative.isEmpty()) return null
+        normalizeRelativePath(relative.split("/"))
+    } catch (e: Exception) {
+        null
+    }
 }

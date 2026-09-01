@@ -56,6 +56,11 @@ class BookRepository(
         bookDao.updateMeta(bookId, totalCharCount, encoding)
     }
 
+    /** 서재 브라우징을 거치지 않고 책이 로드된 경우(이어서 읽기 등)의 relativePath 폴백 백필용. */
+    suspend fun updateRelativePath(bookId: Long, relativePath: String) {
+        bookDao.updateRelativePath(bookId, relativePath)
+    }
+
     suspend fun updateReadPosition(bookId: Long, offset: Int, progressPercent: Float) {
         bookDao.updateReadPosition(bookId, offset, progressPercent, System.currentTimeMillis())
     }
