@@ -73,3 +73,5 @@ Thumbs.db
 
 # Raw icon export (source files for app/web/ios icons; applied copies live under res/)
 .tmp_icon/
+
+.idea/
