@@ -28,13 +28,17 @@ import com.moonkata.textreader.data.parser.PaginationParams
 import com.moonkata.textreader.data.parser.Paginator
 import com.moonkata.textreader.data.parser.TextReflower
 import com.moonkata.textreader.data.repository.BookRepository
+import com.moonkata.textreader.data.sync.ReadingPositionSyncClient
+import com.moonkata.textreader.data.sync.SupabaseConfig
 import com.moonkata.textreader.model.Chapter
 import com.moonkata.textreader.model.PageBreak
 import com.moonkata.textreader.model.Paragraph
 import com.moonkata.textreader.model.SearchResult
 import com.moonkata.textreader.tts.AutoPageTurnController
 import com.moonkata.textreader.tts.TtsController
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +61,9 @@ data class ReaderUiState(
     val currentPage: PageBreak? = null,
     val currentOffset: Int = 0,
     val settings: ReaderSettings = ReaderSettings(),
+    /** PC(VSCode)나 다른 기기가 이 책을 더 멀리 읽었을 때의 오프셋 — null이면 팝업 없음.
+     * .docs/VSCODE_SYNC_PLAN.md §4 참고. */
+    val externalFurtherOffset: Int? = null,
 )
 
 sealed class ReaderNavEvent {
@@ -89,6 +96,9 @@ class ReaderViewModel(
     private var ttsController: TtsController? = null
     private var ttsPendingRange: Pair<Int, Int>? = null
     private val ttsChunkChars = 500
+
+    /** 같은 위치에서 이만큼(1분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고. */
+    private val remoteSyncIdleMs = 60_000L
 
     private val autoPageTurnController = AutoPageTurnController(viewModelScope) { advance() }
 
@@ -151,10 +161,66 @@ class ReaderViewModel(
                     currentOffset = book.lastReadCharOffset.coerceIn(0, result.text.length),
                 )
             }
+            // 원격에 이미 반영된 값의 기준선 — 이 값과 같은 오프셋으로는 다시 안 올린다(§원격 동기화 참고).
+            lastRemoteSyncedOffset = book.lastReadCharOffset
             // 챕터 탐지(전체 텍스트 줄 단위 정규식 스캔)는 첫 페이지 표시에 필요 없다 —
             // 로딩 게이트에서 빼서 백그라운드로 돌리고, 끝나는 대로 chapters만 나중에 채운다.
             redetectChapters(settings)
+            checkExternalFurtherPositionNow()
         }
+    }
+
+    /**
+     * VSCode 등 다른 기기가 이 책을 더 멀리 읽었는지 조회 — 책을 열 때(loadBook) 한 번, 그리고 리더
+     * 화면이 다시 보이게 될 때(화면 잠금 해제, 다른 앱에서 돌아옴 등, §onReaderResumed)마다 다시 확인한다.
+     * 읽는 도중 계속 폴링하지는 않는다 — "화면을 다시 보게 된 시점"에만 다른 기기 위치가 궁금해지므로.
+     */
+    private fun checkExternalFurtherPositionNow() {
+        val state = _uiState.value
+        val book = state.book
+        if (state.isLoading || book == null || book.relativePath.isEmpty()) return
+        val client = syncClientOrNull(state.settings) ?: return
+        viewModelScope.launch {
+            val remote = client.fetch(book.relativePath) ?: return@launch
+            if (remote.charOffset > _uiState.value.currentOffset) {
+                _uiState.update { it.copy(externalFurtherOffset = remote.charOffset) }
+            }
+        }
+    }
+
+    /** 리더 화면이 다시 화면에 보이게 됐을 때(화면 켜짐, 다른 앱에서 복귀 등) 호출 — ON_START에 연결. */
+    fun onReaderResumed() {
+        checkExternalFurtherPositionNow()
+    }
+
+    /**
+     * 시크릿을 입력만 하고 "연결 테스트"를 눌러본 적 없으면(혹은 마지막 검증 이후 값이 바뀌었으면)
+     * null — 검증 안 된 시크릿으로 계속 실패할 요청을 조용히 반복해서 보내는 걸 막는다. 설정 화면의
+     * "연결됨" 배지가 곧 이 기능이 실제로 켜져 있다는 뜻과 정확히 같아야 사용자가 헷갈리지 않는다.
+     */
+    private fun syncClientOrNull(settings: ReaderSettings): ReadingPositionSyncClient? {
+        if (settings.supabaseSharedSecret.isBlank()) return null
+        if (settings.supabaseSharedSecret != settings.supabaseVerifiedSecret) return null
+        return ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, settings.supabaseSharedSecret)
+    }
+
+    /** 설정 화면 "연결 테스트" 버튼 — 성공하면 시크릿과 함께 검증 상태를 같이 커밋한다. */
+    suspend fun testSupabaseConnection(secret: String): Boolean {
+        if (secret.isBlank()) return false
+        val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
+        val success = client.testConnection()
+        if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
+        return success
+    }
+
+    fun dismissExternalPositionPrompt() {
+        _uiState.update { it.copy(externalFurtherOffset = null) }
+    }
+
+    fun jumpToExternalPosition() {
+        val offset = _uiState.value.externalFurtherOffset ?: return
+        _uiState.update { it.copy(externalFurtherOffset = null) }
+        jumpToOffset(offset)
     }
 
     private suspend fun reflowParagraphs(mode: LineBreakMode) {
@@ -261,7 +327,10 @@ class ReaderViewModel(
 
     fun updateCurrentOffset(offset: Int, persist: Boolean = true) {
         _uiState.update { it.copy(currentOffset = offset) }
-        if (persist) schedulePositionWrite(offset)
+        if (persist) {
+            schedulePositionWrite(offset)
+            scheduleRemoteSyncCheckpoint(offset)
+        }
     }
 
     private fun schedulePositionWrite(offset: Int) {
@@ -274,12 +343,15 @@ class ReaderViewModel(
     }
 
     /**
-     * 디바운스 타이머를 기다리지 않고 마지막 읽기 위치를 즉시 저장한다.
+     * 디바운스 타이머를 기다리지 않고 마지막 읽기 위치를 로컬(Room)에 즉시 저장한다.
      * 화면이 백그라운드로 가거나(ON_STOP) 리더를 벗어날 때 호출해 위치 유실을 막는다.
+     * 원격(Supabase) 동기화는 별도 경로(§원격 동기화, [syncNowToRemote])로 처리한다 — 로컬 저장은
+     * 페이지/문단이 바뀔 때마다 자주 일어나도 비용이 거의 없지만, 원격은 네트워크 호출이라 매번 올리면
+     * 낭비이므로 트리거를 분리했다.
      */
     fun flushPendingPosition() {
         val offset = consumePendingOffset() ?: return
-        viewModelScope.launch { persistPosition(offset) }
+        viewModelScope.launch { persistPositionLocal(offset) }
     }
 
     private fun consumePendingOffset(): Int? {
@@ -289,10 +361,50 @@ class ReaderViewModel(
         return offset
     }
 
-    private suspend fun persistPosition(offset: Int) {
+    private suspend fun persistPositionLocal(offset: Int) {
         val total = _uiState.value.fullText.length
         val progress = if (total > 0) offset.toFloat() / total else 0f
         bookRepository.updateReadPosition(bookId, offset, progress)
+    }
+
+    // --- 원격(Supabase) 동기화 ---
+    // 페이지/문단 이동마다 매번 올리면 낭비라, 아래 두 경로로만 원격에 반영한다:
+    // 1) 같은 위치에서 REMOTE_SYNC_IDLE_MS(1분) 이상 머무르면(체크포인트)
+    // 2) 리더 화면을 벗어나는 시점(뒤로가기 → onCleared / 화면 꺼짐·홈·다른 앱 전환 → ON_STOP) 즉시
+
+    private var remoteCheckpointJob: Job? = null
+
+    /** 마지막으로 원격에 실제로 반영한 오프셋 — 그 값과 같으면 다시 안 올려서 불필요한 호출을 줄인다. */
+    private var lastRemoteSyncedOffset: Int? = null
+
+    private fun scheduleRemoteSyncCheckpoint(offset: Int) {
+        remoteCheckpointJob?.cancel()
+        remoteCheckpointJob = viewModelScope.launch {
+            delay(remoteSyncIdleMs)
+            pushRemoteSync(offset)
+        }
+    }
+
+    /** 뷰어를 벗어나는 시점에 호출 — 체크포인트 타이머를 기다리지 않고 지금 위치를 바로 원격에 반영한다. */
+    fun syncNowToRemote() {
+        remoteCheckpointJob?.cancel()
+        pushRemoteSync(_uiState.value.currentOffset)
+    }
+
+    private fun pushRemoteSync(offset: Int) {
+        if (offset == lastRemoteSyncedOffset) return
+        val state = _uiState.value
+        val book = state.book
+        val relativePath = book?.relativePath.orEmpty()
+        if (relativePath.isEmpty()) return
+        val client = syncClientOrNull(state.settings) ?: return
+        lastRemoteSyncedOffset = offset
+        // GlobalScope로 일부러 분리 — viewModelScope에 묶으면 onCleared 직후(runBlocking으로 로컬 저장을
+        // 마치는 바로 그 시점) viewModelScope가 이미 취소되어 있어 이 업서트가 시작도 못 하고 사라진다.
+        // 화면을 떠나는 순간의 위치야말로 동기화가 가장 필요한 시점이라, 최선 노력(best-effort)으로라도
+        // 뷰모델 생명주기와 무관하게 나가야 한다.
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) { client.upsert(relativePath, offset, book?.detectedEncoding) }
     }
 
     fun jumpToOffset(offset: Int) {
@@ -418,6 +530,7 @@ class ReaderViewModel(
     fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
     fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
     fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+    fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
 
     // --- 챕터 인식 패턴 ---
     fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
@@ -519,7 +632,9 @@ class ReaderViewModel(
     override fun onCleared() {
         super.onCleared()
         // viewModelScope는 onCleared 직후 취소되므로, 아직 저장 안 된 위치는 블로킹으로 즉시 반영한다.
-        consumePendingOffset()?.let { offset -> runBlocking { persistPosition(offset) } }
+        consumePendingOffset()?.let { offset -> runBlocking { persistPositionLocal(offset) } }
+        // 뒤로가기 등으로 리더 화면을 완전히 벗어나는 시점 — 원격 체크포인트도 기다리지 않고 바로 반영.
+        syncNowToRemote()
         pageComputeJob?.cancel()
         autoPageTurnController.stop()
         ttsController?.shutdown()

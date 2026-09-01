@@ -1,0 +1,104 @@
+package com.moonkata.textreader.data.sync
+
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+
+data class RemoteReadingPosition(val charOffset: Int, val source: String, val encoding: String?)
+
+/**
+ * Supabase PostgREST 직접 호출 — .docs/VSCODE_SYNC_PLAN.md §1/§4.
+ * 실패(네트워크 끊김, 설정값 오류, 파싱 실패 등)는 전부 조용히 null/무시로 처리한다 — best-effort
+ * 기능이라 이 클라이언트의 어떤 예외도 리더 화면의 핵심 흐름(로컬 로딩/저장)을 막으면 안 된다.
+ */
+class ReadingPositionSyncClient(
+    private val baseUrl: String,
+    private val publishableKey: String,
+    private val sharedSecret: String,
+) {
+    private val restBase: String
+        get() = "${baseUrl.trimEnd('/')}/rest/v1/reading_positions"
+
+    suspend fun fetch(relativePath: String): RemoteReadingPosition? = withContext(Dispatchers.IO) {
+        runCatching {
+            val encoded = URLEncoder.encode(relativePath, "UTF-8")
+            val url = URL("$restBase?select=char_offset,source,encoding&relative_path=eq.$encoded")
+            openConnection(url, "GET").inputStream.use { input ->
+                val array = JSONArray(input.bufferedReader().readText())
+                if (array.length() == 0) return@runCatching null
+                val obj = array.getJSONObject(0)
+                RemoteReadingPosition(
+                    charOffset = obj.getInt("char_offset"),
+                    source = obj.getString("source"),
+                    encoding = if (obj.isNull("encoding")) null else obj.getString("encoding"),
+                )
+            }
+        }.onFailure { Log.w(TAG, "위치 조회 실패", it) }.getOrNull()
+    }
+
+    suspend fun upsert(relativePath: String, charOffset: Int, encoding: String?) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val connection = openConnection(URL(restBase), "POST").apply {
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Prefer", "resolution=merge-duplicates")
+                    doOutput = true
+                }
+                val body = JSONObject().apply {
+                    put("relative_path", relativePath)
+                    put("char_offset", charOffset)
+                    put("source", "android")
+                    put("encoding", encoding ?: JSONObject.NULL)
+                }
+                OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(body.toString()) }
+                connection.inputStream.use { it.readBytes() } // 응답을 소비해야 요청이 실제로 완료됨
+            }.onFailure { Log.w(TAG, "위치 upsert 실패", it) }
+        }
+    }
+
+    /**
+     * 설정 화면의 "연결 테스트" 버튼용 — 고정된 더미 경로로 upsert를 시도해 시크릿이 RLS를 통과하는지
+     * 확인한다. 단순 조회로는 검증이 안 된다 — RLS가 막은 SELECT는 에러가 아니라 그냥 빈 배열을
+     * 돌려주므로(§1 curl 검증 때 확인한 내용) "행이 없어서 비었나 시크릿이 틀려서 비었나"를 구분할 수
+     * 없다. upsert(INSERT)는 RLS를 어기면 PostgREST가 401/403으로 명확히 거부하므로 이 차이를 이용한다.
+     */
+    suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = openConnection(URL(restBase), "POST").apply {
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Prefer", "resolution=merge-duplicates")
+                doOutput = true
+            }
+            val body = JSONObject().apply {
+                put("relative_path", CONNECTION_TEST_PATH)
+                put("char_offset", 0)
+                put("source", "android")
+                put("encoding", JSONObject.NULL)
+            }
+            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(body.toString()) }
+            connection.responseCode in 200..299
+        }.getOrDefault(false)
+    }
+
+    private fun openConnection(url: URL, method: String): HttpURLConnection =
+        (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            // 신규 Supabase 키 체계(publishable/secret)는 apikey 헤더에만 넣는다 — Authorization: Bearer에
+            // 같이 넣으면 JWT로 파싱을 시도하다 거부된다(§1 참고).
+            setRequestProperty("apikey", publishableKey)
+            setRequestProperty("x-moonkata-secret", sharedSecret)
+        }
+
+    companion object {
+        private const val TAG = "ReadingPositionSync"
+        private const val CONNECTION_TEST_PATH = "__connection_test__"
+    }
+}

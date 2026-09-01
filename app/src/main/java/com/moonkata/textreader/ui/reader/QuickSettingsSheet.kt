@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -21,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -28,9 +32,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
@@ -42,6 +50,7 @@ import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
 import com.moonkata.textreader.data.datastore.TouchTurnMode
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +59,22 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
     var showFontPicker by remember { mutableStateOf(false) }
     var showChapterPatterns by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // 공유 시크릿은 포커스 상실(blur) 이벤트에 기대어 커밋하지 않는다 — 뒤로가기/바깥 탭으로 시트가
+    // 갑자기 닫힐 때 그 이벤트가 안정적으로 안 오는 경우가 있었다(실기기 확인). 대신 로컬 초안 상태로만
+    // 들고 있다가, 시트가 닫히는 모든 경로가 공통으로 거치는 onDismissRequest 시점에 커밋한다 —
+    // 연결 테스트에 성공하면 그 즉시 별도로 커밋되므로(검증 상태와 함께) 이 경로는 "테스트 안 해보고
+    // 그냥 닫은" 경우의 폴백이다.
+    var sharedSecretDraft by remember { mutableStateOf(settings.supabaseSharedSecret) }
+    var testingSync by remember { mutableStateOf(false) }
+    var syncTestFailed by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val dismissAndCommitSync: () -> Unit = {
+        if (sharedSecretDraft != settings.supabaseSharedSecret) viewModel.setSupabaseSharedSecret(sharedSecretDraft)
+        onDismiss()
+    }
+
+    ModalBottomSheet(onDismissRequest = dismissAndCommitSync, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text("글자", style = MaterialTheme.typography.titleMedium)
             LabeledStepper("크기", settings.fontSizeSp, 1f, 12f..32f, format = { "${it.toInt()}sp" }) { viewModel.setFontSizeSp(it) }
@@ -205,6 +229,51 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
                 }
             }
 
+            SectionDivider()
+            Text("VSCode 읽기 위치 동기화", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "PC(VSCode)에서 만든 공유 시크릿을 붙여넣고 연결 테스트를 눌러 확인하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            SyncSettingField("공유 시크릿", sharedSecretDraft, isSecret = true) {
+                sharedSecretDraft = it
+                syncTestFailed = false
+            }
+            val isVerified = sharedSecretDraft.isNotBlank() && sharedSecretDraft == settings.supabaseVerifiedSecret
+            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        testingSync = true
+                        syncTestFailed = false
+                        coroutineScope.launch {
+                            val success = viewModel.testSupabaseConnection(sharedSecretDraft)
+                            testingSync = false
+                            syncTestFailed = !success
+                        }
+                    },
+                    enabled = sharedSecretDraft.isNotBlank() && !testingSync,
+                ) {
+                    if (testingSync) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("연결 테스트")
+                    }
+                }
+                when {
+                    isVerified -> {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2E7D32))
+                        Text("연결됨", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    syncTestFailed -> Text(
+                        "연결 실패 — 시크릿을 확인하세요",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -220,6 +289,23 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
 @Composable
 private fun SectionDivider() {
     HorizontalDivider(Modifier.padding(vertical = 12.dp))
+}
+
+/**
+ * 순수 컨트롤드 필드 — DataStore에는 바로 안 쓰고, 상위(QuickSettingsSheet)가 들고 있는 로컬 초안
+ * 상태만 갱신한다. 실제 커밋은 시트가 닫힐 때 한 번에 일어난다(매 키 입력마다 DataStore 왕복 쓰기가
+ * 생기면 느리고, 그 응답으로 [settings]가 재emit될 때마다 입력 중인 커서 위치가 흐트러질 수 있어서다).
+ */
+@Composable
+private fun SyncSettingField(label: String, value: String, isSecret: Boolean = false, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    )
 }
 
 @Composable

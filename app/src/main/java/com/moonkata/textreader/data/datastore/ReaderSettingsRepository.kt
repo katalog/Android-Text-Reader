@@ -48,6 +48,8 @@ class ReaderSettingsRepository(private val context: Context) {
         val TOUCH_TURN_MODE = stringPreferencesKey("touch_turn_mode")
         val SWIPE_TURN_MODE = stringPreferencesKey("swipe_turn_mode")
         val PAGE_TRANSITION_ANIMATION = stringPreferencesKey("page_transition_animation")
+        val SUPABASE_SHARED_SECRET = stringPreferencesKey("supabase_shared_secret")
+        val SUPABASE_VERIFIED_SECRET = stringPreferencesKey("supabase_verified_secret")
     }
 
     val settingsFlow: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
@@ -84,6 +86,8 @@ class ReaderSettingsRepository(private val context: Context) {
             swipeTurnMode = prefs[Keys.SWIPE_TURN_MODE]?.let { runCatching { SwipeTurnMode.valueOf(it) }.getOrNull() } ?: defaults.swipeTurnMode,
             pageTransitionAnimation = prefs[Keys.PAGE_TRANSITION_ANIMATION]
                 ?.let { runCatching { PageTransitionAnimation.valueOf(it) }.getOrNull() } ?: defaults.pageTransitionAnimation,
+            supabaseSharedSecret = prefs[Keys.SUPABASE_SHARED_SECRET] ?: defaults.supabaseSharedSecret,
+            supabaseVerifiedSecret = prefs[Keys.SUPABASE_VERIFIED_SECRET] ?: defaults.supabaseVerifiedSecret,
         )
     }
 
@@ -121,6 +125,11 @@ class ReaderSettingsRepository(private val context: Context) {
     suspend fun updateTouchTurnMode(value: TouchTurnMode) = edit { it[Keys.TOUCH_TURN_MODE] = value.name }
     suspend fun updateSwipeTurnMode(value: SwipeTurnMode) = edit { it[Keys.SWIPE_TURN_MODE] = value.name }
     suspend fun updatePageTransitionAnimation(value: PageTransitionAnimation) = edit { it[Keys.PAGE_TRANSITION_ANIMATION] = value.name }
+    /** [verifiedSecret]을 같이 넘기면(연결 테스트 성공 시) 한 번의 커밋으로 시크릿+검증 상태를 함께 저장한다. */
+    suspend fun updateSupabaseSharedSecret(value: String, verifiedSecret: String? = null) = edit {
+        it[Keys.SUPABASE_SHARED_SECRET] = value
+        if (verifiedSecret != null) it[Keys.SUPABASE_VERIFIED_SECRET] = verifiedSecret
+    }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
