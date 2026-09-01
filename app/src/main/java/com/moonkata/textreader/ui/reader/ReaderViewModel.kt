@@ -1,0 +1,538 @@
+package com.moonkata.textreader.ui.reader
+
+import android.app.Application
+import androidx.compose.ui.text.TextMeasurer
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.moonkata.textreader.data.datastore.AutoAdvanceMode
+import com.moonkata.textreader.data.datastore.LineBreakMode
+import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageTransitionAnimation
+import com.moonkata.textreader.data.datastore.PageTurnMode
+import com.moonkata.textreader.data.datastore.ReaderSettings
+import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
+import com.moonkata.textreader.data.datastore.SwipeTurnMode
+import com.moonkata.textreader.data.datastore.ThemePreset
+import com.moonkata.textreader.data.datastore.TouchTurnMode
+import com.moonkata.textreader.data.db.AppDatabase
+import com.moonkata.textreader.data.db.BookEntity
+import com.moonkata.textreader.data.font.FontCatalogEntry
+import com.moonkata.textreader.data.font.FontDownloadManager
+import com.moonkata.textreader.data.font.FontDownloadState
+import com.moonkata.textreader.data.parser.ChapterDetector
+import com.moonkata.textreader.data.parser.ChapterPatternCatalog
+import com.moonkata.textreader.data.parser.ChapterJumpNavigator
+import com.moonkata.textreader.data.parser.PaginationParams
+import com.moonkata.textreader.data.parser.Paginator
+import com.moonkata.textreader.data.parser.TextReflower
+import com.moonkata.textreader.data.repository.BookRepository
+import com.moonkata.textreader.model.Chapter
+import com.moonkata.textreader.model.PageBreak
+import com.moonkata.textreader.model.Paragraph
+import com.moonkata.textreader.model.SearchResult
+import com.moonkata.textreader.tts.AutoPageTurnController
+import com.moonkata.textreader.tts.TtsController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+
+data class ReaderUiState(
+    val isLoading: Boolean = true,
+    val book: BookEntity? = null,
+    val fullText: String = "",
+    val paragraphs: List<Paragraph> = emptyList(),
+    val chapters: List<Chapter> = emptyList(),
+    /** 페이지 모드에서 지금 화면에 보여줄 페이지 하나 — 책 전체 페이지 목록은 더 이상 들고 있지 않는다. */
+    val currentPage: PageBreak? = null,
+    val currentOffset: Int = 0,
+    val settings: ReaderSettings = ReaderSettings(),
+)
+
+sealed class ReaderNavEvent {
+    data class JumpToOffset(val offset: Int, val animate: Boolean) : ReaderNavEvent()
+    data object RequestNextPage : ReaderNavEvent()
+    data object RequestPreviousPage : ReaderNavEvent()
+}
+
+/**
+ * [bookRepository]는 생성자로 주입받는다 — 테스트가 프로덕션 싱글톤 `AppDatabase` 대신 격리된
+ * 인메모리 DB로 갈아끼울 수 있게 하기 위함이다(그렇지 않으면 테스트가 만든 bookId가 실제 앱 DB의
+ * 전혀 다른 책 행을 가리켜, 그 책이 진짜 SAF 파일이면 권한 오류로 깨진다). 프로덕션 조립은
+ * [ReaderViewModelFactory]가 담당한다.
+ */
+class ReaderViewModel(
+    application: Application,
+    private val bookId: Long,
+    private val bookRepository: BookRepository,
+) : AndroidViewModel(application) {
+
+    val settingsRepository = ReaderSettingsRepository(application)
+    private val fontDownloadManager = FontDownloadManager(application)
+
+    private val _uiState = MutableStateFlow(ReaderUiState())
+    val uiState: StateFlow<ReaderUiState> = _uiState
+
+    private val _navEvents = MutableSharedFlow<ReaderNavEvent>(extraBufferCapacity = 4)
+    val navEvents: SharedFlow<ReaderNavEvent> = _navEvents
+
+    private var ttsController: TtsController? = null
+    private var ttsPendingRange: Pair<Int, Int>? = null
+    private val ttsChunkChars = 500
+
+    private val autoPageTurnController = AutoPageTurnController(viewModelScope) { advance() }
+
+    private var lastPaginationKey: String? = null
+    private var pageComputeJob: Job? = null
+    private var lastTextMeasurer: TextMeasurer? = null
+    private var lastPaginationParams: PaginationParams? = null
+    private var writePositionJob: Job? = null
+
+    /** 정방향으로 넘겨온 페이지들 — "이전"에서 다시 계산할 필요 없이 그대로 팝해서 쓴다. */
+    private val pageHistory = ArrayDeque<PageBreak>()
+
+    /**
+     * 챕터 점프로 마지막에 이동한 목표 오프셋 — 페이지가 실제로 정착(settle)하면
+     * currentOffset이 그 페이지의 시작 오프셋(목표보다 앞일 수 있음)으로 재조정되는데,
+     * 그 값을 그대로 다음 breakpoint 계산의 기준으로 쓰면 같은 지점이 다시 잡혀 탭이
+     * 한 번 더 필요해진다. 실제 목표 오프셋을 별도로 기억해 기준으로 삼아 이를 막는다.
+     */
+    private var lastChapterJumpOffset: Int? = null
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settingsFlow.collect { settings ->
+                val previous = _uiState.value.settings
+                _uiState.update { it.copy(settings = settings) }
+                if (settings.lineBreakMode != previous.lineBreakMode && _uiState.value.fullText.isNotEmpty()) {
+                    reflowParagraphs(settings.lineBreakMode)
+                }
+                val patternsChanged = settings.chapterPatternEnabledIds != previous.chapterPatternEnabledIds ||
+                    settings.chapterCustomPatterns != previous.chapterCustomPatterns
+                if (patternsChanged && _uiState.value.fullText.isNotEmpty()) {
+                    redetectChapters(settings)
+                }
+                handleAutoAdvanceModeChange(settings)
+            }
+        }
+        viewModelScope.launch {
+            bookRepository.observeBook(bookId).collect { book ->
+                if (book != null) _uiState.update { it.copy(book = book) }
+            }
+        }
+        loadBook()
+    }
+
+    private fun loadBook() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val book = bookRepository.observeBook(bookId).first() ?: return@launch
+            val result = bookRepository.openBookContent(book)
+            val settings = _uiState.value.settings
+            val paragraphs = withContext(Dispatchers.Default) {
+                TextReflower.reflow(result.text, settings.lineBreakMode)
+            }
+            bookRepository.markOpened(bookId, result.text.length, result.encoding)
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    fullText = result.text,
+                    paragraphs = paragraphs,
+                    currentOffset = book.lastReadCharOffset.coerceIn(0, result.text.length),
+                )
+            }
+            // 챕터 탐지(전체 텍스트 줄 단위 정규식 스캔)는 첫 페이지 표시에 필요 없다 —
+            // 로딩 게이트에서 빼서 백그라운드로 돌리고, 끝나는 대로 chapters만 나중에 채운다.
+            redetectChapters(settings)
+        }
+    }
+
+    private suspend fun reflowParagraphs(mode: LineBreakMode) {
+        val text = _uiState.value.fullText
+        val paragraphs = withContext(Dispatchers.Default) { TextReflower.reflow(text, mode) }
+        _uiState.update { it.copy(paragraphs = paragraphs) }
+        lastPaginationKey = null
+    }
+
+    private suspend fun redetectChapters(settings: ReaderSettings) {
+        val text = _uiState.value.fullText
+        val patterns = ChapterPatternCatalog.buildRegexList(settings.chapterPatternEnabledIds, settings.chapterCustomPatterns)
+        val chapters = withContext(Dispatchers.Default) { ChapterDetector.detect(text, patterns) }
+        _uiState.update { it.copy(chapters = chapters) }
+    }
+
+    fun onViewportMeasured(textMeasurer: TextMeasurer, params: PaginationParams) {
+        val state = _uiState.value
+        if (state.settings.pageTurnMode != PageTurnMode.HORIZONTAL_PAGE) return
+        if (state.paragraphs.isEmpty()) return
+        val key = "${params.fontFamily}|${params.fontSizeSp}|${params.lineHeightMultiplier}|" +
+            "${params.letterSpacingSp}|${params.contentWidthPx}|${params.contentHeightPx}|${state.settings.lineBreakMode}"
+        if (key == lastPaginationKey) return
+        lastPaginationKey = key
+        lastTextMeasurer = textMeasurer
+        lastPaginationParams = params
+        // 폰트/여백/화면 크기가 바뀌면 줄바꿈이 달라져 페이지 경계 자체가 달라진다 — 지금 읽던 위치를
+        // 기준으로 현재 페이지만 새로 계산한다. 방문 이력은 이전 페이지 경계 기준으로 쌓인 것이라 더 이상
+        // 유효하지 않으므로 비운다.
+        pageHistory.clear()
+        computeCurrentPageAt(state.currentOffset)
+    }
+
+    /** anchorOffset부터 시작하는 페이지 하나만 계산해 currentPage에 반영한다 — 초기 로드/설정 변경 시 사용. */
+    private fun computeCurrentPageAt(anchorOffset: Int) {
+        val textMeasurer = lastTextMeasurer ?: return
+        val params = lastPaginationParams ?: return
+        val state = _uiState.value
+        if (state.paragraphs.isEmpty()) return
+
+        pageComputeJob?.cancel()
+        pageComputeJob = viewModelScope.launch(Dispatchers.Default) {
+            val page = Paginator.paginateFrom(state.fullText, state.paragraphs, anchorOffset, textMeasurer, params, maxPages = 1).firstOrNull()
+            _uiState.update { it.copy(currentPage = page) }
+        }
+    }
+
+    /** 페이지 모드에서 offset부터 시작하는 페이지로 즉시 이동한다 — 검색/목차/북마크/챕터 점프 공용. */
+    private fun jumpToPageAt(offset: Int) {
+        pageHistory.clear()
+        computeCurrentPageAt(offset)
+    }
+
+    /** 페이지 모드에서 한 페이지 앞으로 — 현재 페이지를 방문 이력에 쌓고, 그 끝부터 한 페이지만 계산한다. */
+    private fun advancePageForward() {
+        val textMeasurer = lastTextMeasurer ?: return
+        val params = lastPaginationParams ?: return
+        val state = _uiState.value
+        val current = state.currentPage ?: return
+        if (current.endOffset >= state.fullText.length) return // 이미 마지막 페이지
+
+        pageHistory.addLast(current)
+        pageComputeJob?.cancel()
+        pageComputeJob = viewModelScope.launch(Dispatchers.Default) {
+            val next = Paginator.paginateFrom(state.fullText, state.paragraphs, current.endOffset, textMeasurer, params, maxPages = 1).firstOrNull()
+            if (next != null) {
+                _uiState.update { it.copy(currentPage = next) }
+                updateCurrentOffset(next.startOffset)
+            }
+        }
+    }
+
+    /**
+     * 페이지 모드에서 한 페이지 뒤로. 정방향으로 넘겨오면서 쌓인 방문 이력이 있으면 그대로 팝해서
+     * 쓴다(정확·즉시). 점프 직후처럼 이력이 없으면 [Paginator.onePageEndingAt]으로 역산 추정한다.
+     */
+    private fun advancePageBackward() {
+        val textMeasurer = lastTextMeasurer ?: return
+        val params = lastPaginationParams ?: return
+        val state = _uiState.value
+        val current = state.currentPage ?: return
+        if (current.startOffset <= 0) return // 이미 첫 페이지
+
+        val fromHistory = pageHistory.removeLastOrNull()
+        if (fromHistory != null) {
+            _uiState.update { it.copy(currentPage = fromHistory) }
+            updateCurrentOffset(fromHistory.startOffset)
+            return
+        }
+
+        val referenceSpan = (current.endOffset - current.startOffset).coerceAtLeast(1)
+        pageComputeJob?.cancel()
+        pageComputeJob = viewModelScope.launch(Dispatchers.Default) {
+            val prev = Paginator.onePageEndingAt(state.fullText, state.paragraphs, current.startOffset, textMeasurer, params, referenceSpan)
+            if (prev != null) {
+                _uiState.update { it.copy(currentPage = prev) }
+                updateCurrentOffset(prev.startOffset)
+            }
+        }
+    }
+
+    /** 아직 DB에 쓰이지 않은 마지막 오프셋 — 디바운스 타이머가 끝나기 전에 화면을 벗어나도 유실되지 않게 붙잡아 둔다. */
+    private var pendingWriteOffset: Int? = null
+
+    fun updateCurrentOffset(offset: Int, persist: Boolean = true) {
+        _uiState.update { it.copy(currentOffset = offset) }
+        if (persist) schedulePositionWrite(offset)
+    }
+
+    private fun schedulePositionWrite(offset: Int) {
+        pendingWriteOffset = offset
+        writePositionJob?.cancel()
+        writePositionJob = viewModelScope.launch {
+            delay(500)
+            flushPendingPosition()
+        }
+    }
+
+    /**
+     * 디바운스 타이머를 기다리지 않고 마지막 읽기 위치를 즉시 저장한다.
+     * 화면이 백그라운드로 가거나(ON_STOP) 리더를 벗어날 때 호출해 위치 유실을 막는다.
+     */
+    fun flushPendingPosition() {
+        val offset = consumePendingOffset() ?: return
+        viewModelScope.launch { persistPosition(offset) }
+    }
+
+    private fun consumePendingOffset(): Int? {
+        val offset = pendingWriteOffset ?: return null
+        pendingWriteOffset = null
+        writePositionJob?.cancel()
+        return offset
+    }
+
+    private suspend fun persistPosition(offset: Int) {
+        val total = _uiState.value.fullText.length
+        val progress = if (total > 0) offset.toFloat() / total else 0f
+        bookRepository.updateReadPosition(bookId, offset, progress)
+    }
+
+    fun jumpToOffset(offset: Int) {
+        lastChapterJumpOffset = null
+        updateCurrentOffset(offset)
+        if (_uiState.value.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+            jumpToPageAt(offset)
+        } else {
+            _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(offset, animate = true))
+        }
+    }
+
+    // --- 챕터 점프를 반영한 다음/이전 ---
+    fun next() {
+        val state = _uiState.value
+        if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
+            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions)
+            val anchor = maxOf(state.currentOffset, lastChapterJumpOffset ?: Int.MIN_VALUE)
+            val target = ChapterJumpNavigator.nextBreakpoint(breakpoints, anchor)
+            if (target == null) {
+                // 더 이상 점프할 지점이 없음(마지막 챕터 이후) — 그냥 페이지 넘김으로 폴백해 탭이 "죽지" 않게 한다.
+                advanceNormally(state)
+                return
+            }
+            lastChapterJumpOffset = target
+            updateCurrentOffset(target)
+            if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+                jumpToPageAt(target)
+            } else {
+                _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
+            }
+        } else {
+            advanceNormally(state)
+        }
+    }
+
+    fun previous() {
+        val state = _uiState.value
+        if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
+            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions)
+            val anchor = minOf(state.currentOffset, lastChapterJumpOffset ?: Int.MAX_VALUE)
+            val target = ChapterJumpNavigator.previousBreakpoint(breakpoints, anchor)
+            if (target == null) {
+                retreatNormally(state)
+                return
+            }
+            lastChapterJumpOffset = target
+            updateCurrentOffset(target)
+            if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+                jumpToPageAt(target)
+            } else {
+                _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
+            }
+        } else {
+            retreatNormally(state)
+        }
+    }
+
+    private fun advanceNormally(state: ReaderUiState) {
+        if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+            advancePageForward()
+        } else {
+            _navEvents.tryEmit(ReaderNavEvent.RequestNextPage)
+        }
+    }
+
+    private fun retreatNormally(state: ReaderUiState) {
+        if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+            advancePageBackward()
+        } else {
+            _navEvents.tryEmit(ReaderNavEvent.RequestPreviousPage)
+        }
+    }
+
+    // --- 검색 ---
+    /** 검색 시트를 닫았다 다시 열어도 마지막 검색 결과를 이어서 볼 수 있도록 기억해둔다. */
+    var lastSearchQuery: String = ""
+        private set
+    var lastSearchResults: List<SearchResult> = emptyList()
+        private set
+
+    fun search(query: String): List<SearchResult> {
+        if (query.isBlank()) return emptyList()
+        val text = _uiState.value.fullText
+        val results = mutableListOf<SearchResult>()
+        var idx = text.indexOf(query, 0, ignoreCase = true)
+        while (idx >= 0 && results.size < 200) {
+            val snippetStart = (idx - 20).coerceAtLeast(0)
+            val snippetEnd = (idx + query.length + 20).coerceAtMost(text.length)
+            // 스니펫이 문단 경계(빈 줄)를 걸치면 개행이 그대로 남아 미리보기의 maxLines를
+            // 빈 줄로 다 써버리고 정작 매칭된 부분이 화면 밖으로 밀려난다 — 공백 한 칸으로 합친다.
+            val snippet = text.substring(snippetStart, snippetEnd).replace(Regex("\\s+"), " ").trim()
+            results += SearchResult(idx, snippet)
+            idx = text.indexOf(query, idx + query.length, ignoreCase = true)
+        }
+        lastSearchQuery = query
+        lastSearchResults = results
+        return results
+    }
+
+    // --- 설정 setter ---
+    fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
+    fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
+    fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
+    fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
+    fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
+    fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
+    fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
+    fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
+    fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
+    fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
+    fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
+    fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
+    fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
+    fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
+    fun setChapterJumpEnabled(value: Boolean) {
+        lastChapterJumpOffset = null
+        launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
+    }
+    fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
+    fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
+    fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
+    fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
+    fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+
+    // --- 챕터 인식 패턴 ---
+    fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
+        val current = _uiState.value.settings.chapterPatternEnabledIds
+        val updated = if (enabled) current + id else current - id
+        settingsRepository.updateChapterPatternEnabledIds(updated)
+    }
+
+    /** 형식이 올바르지 않은 정규식이면 추가하지 않고 false를 반환한다. */
+    fun addCustomChapterPattern(pattern: String): Boolean {
+        if (pattern.isBlank() || runCatching { Regex(pattern) }.isFailure) return false
+        launchSetting {
+            val current = _uiState.value.settings.chapterCustomPatterns
+            settingsRepository.updateChapterCustomPatterns(current + pattern)
+        }
+        return true
+    }
+
+    fun removeCustomChapterPattern(pattern: String) = launchSetting {
+        val current = _uiState.value.settings.chapterCustomPatterns
+        settingsRepository.updateChapterCustomPatterns(current - pattern)
+    }
+
+    fun setAutoAdvanceMode(mode: AutoAdvanceMode) {
+        if (mode == AutoAdvanceMode.TTS) {
+            startTts()
+        } else {
+            launchSetting { settingsRepository.updateAutoAdvanceMode(mode) }
+        }
+    }
+
+    private fun launchSetting(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
+    }
+
+    // --- 폰트 다운로드 ---
+    fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
+    fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
+
+    // --- TTS ---
+    fun startTts() {
+        if (ttsController == null) {
+            ttsController = TtsController(getApplication()) { utteranceId -> onTtsUtteranceDone(utteranceId) }
+        }
+        viewModelScope.launch { settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.TTS) }
+        speakFromCurrentOffset()
+    }
+
+    fun stopTts() {
+        ttsController?.stop()
+        viewModelScope.launch { settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF) }
+    }
+
+    private fun speakFromCurrentOffset() {
+        val state = _uiState.value
+        val start = state.currentOffset
+        if (start >= state.fullText.length) {
+            stopTts()
+            return
+        }
+        val end = (start + ttsChunkChars).coerceAtMost(state.fullText.length)
+        ttsPendingRange = start to end
+        ttsController?.speak(start, state.fullText.substring(start, end))
+    }
+
+    private fun onTtsUtteranceDone(utteranceId: String) {
+        viewModelScope.launch {
+            val range = ttsPendingRange ?: return@launch
+            if (_uiState.value.settings.autoAdvanceMode != AutoAdvanceMode.TTS) return@launch
+            jumpToOffset(range.second)
+            speakFromCurrentOffset()
+        }
+    }
+
+    // --- 자동 넘김(타이머) ---
+    private fun advance() {
+        if (_uiState.value.settings.autoAdvanceMode != AutoAdvanceMode.TIMER) return
+        next()
+    }
+
+    private var lastTimerMode: AutoAdvanceMode? = null
+    private var lastTimerIntervalSeconds: Int? = null
+
+    private fun handleAutoAdvanceModeChange(settings: ReaderSettings) {
+        if (settings.autoAdvanceMode == AutoAdvanceMode.TIMER) {
+            if (lastTimerMode != AutoAdvanceMode.TIMER || lastTimerIntervalSeconds != settings.autoPageTurnIntervalSeconds) {
+                autoPageTurnController.start(settings.autoPageTurnIntervalSeconds)
+            }
+        } else {
+            autoPageTurnController.stop()
+        }
+        lastTimerMode = settings.autoAdvanceMode
+        lastTimerIntervalSeconds = settings.autoPageTurnIntervalSeconds
+        if (settings.autoAdvanceMode != AutoAdvanceMode.TTS) {
+            ttsController?.stop()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // viewModelScope는 onCleared 직후 취소되므로, 아직 저장 안 된 위치는 블로킹으로 즉시 반영한다.
+        consumePendingOffset()?.let { offset -> runBlocking { persistPosition(offset) } }
+        pageComputeJob?.cancel()
+        autoPageTurnController.stop()
+        ttsController?.shutdown()
+    }
+}
+
+class ReaderViewModelFactory(
+    private val application: Application,
+    private val bookId: Long,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val bookRepository = BookRepository(application, AppDatabase.getDatabase(application).bookDao())
+        return ReaderViewModel(application, bookId, bookRepository) as T
+    }
+}
