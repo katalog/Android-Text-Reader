@@ -253,10 +253,12 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                 ReaderTopBar(
                     title = uiState.book?.displayName ?: "",
                     readerColors = readerColors,
+                    chapterJumpEnabled = settings.chapterJumpEnabled,
                     onBack = onBack,
                     onToc = { showToc = true },
                     onSearch = { showSearch = true },
                     onSettings = { showQuickSettings = true },
+                    onToggleChapterJump = { viewModel.setChapterJumpEnabled(!settings.chapterJumpEnabled) },
                 )
             }
             AnimatedVisibility(
@@ -267,9 +269,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
             ) {
                 ReaderBottomBar(
                     progress = progress,
-                    chapterJumpEnabled = settings.chapterJumpEnabled,
                     readerColors = readerColors,
-                    onToggleChapterJump = { viewModel.setChapterJumpEnabled(!settings.chapterJumpEnabled) },
                 )
             }
 
