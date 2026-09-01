@@ -191,7 +191,12 @@
 - **팝업 UI**: 기존 "이어서 읽기" 다이얼로그(`ui/library/LibraryScreen.kt`의 `ResumeReadingDialog`)와
   같은 패턴. 확인 시 기존 `jumpToOffset` 재사용. 같은 프로세스에서 그 책에 대해 한 번 응답하면(확인이든
   취소든) 재노출 안 함.
-- 네트워크 실패/시크릿 미설정은 조용히 기능 비활성화 — 앱 기본 동작(오프라인)엔 영향 없음. 연결 테스트
+- **동작 게이트는 "시크릿이 채워짐"이 아니라 "연결 테스트에 성공함"이다.** 처음엔 `syncClientOrNull`이
+  시크릿이 비었는지만 봤는데, 그러면 시크릿을 입력만 하고 테스트를 안 눌러본(혹은 오타가 난) 상태에서
+  계속 실패하는 요청을 조용히 반복하게 된다 — "연결됨" 배지와 실제 동작 여부가 안 맞는 상태가 생김.
+  `settings.supabaseSharedSecret == settings.supabaseVerifiedSecret`일 때만(§1 참고, 시크릿을 바꾸면
+  자동으로 어긋남) 동작하도록 고쳐서 배지 표시와 실제 동작 여부가 항상 일치하게 함.
+  네트워크 실패/시크릿 미검증은 조용히 기능 비활성화 — 앱 기본 동작(오프라인)엔 영향 없음. 연결 테스트
   성공 순간부터 별도 재시작 없이 동작 시작.
 
 ## 5. VSCode 확장
@@ -208,22 +213,44 @@
   입력보다 훨씬 덜 번거로움), 워크스페이스 폴더가 열려 있으면 그 경로를 다이얼로그의 시작 위치로 제안.
   선택한 경로는 `moonkataSync.syncRootPath`에 저장해 다음부터는 다시 안 물어봄(설정 화면에서 나중에
   변경 가능). 파일이 그 루트 바깥이면 기능을 건너뛴다.
-- **설정**: Supabase URL/publishable key는 안드로이드의 `SupabaseConfig.kt`와 동급으로 확장 소스에
-  상수로 박아둔다(§1 "시크릿 관리" 참고) — `package.json`에 따로 선언할 설정 자체가 없음. 공유 시크릿만
-  커맨드 하나(`showInputBox({ password: true })` → `context.secrets.store(...)`)로 `vscode.SecretStorage`에
-  받는다. 별도로 "Moonkata Sync: 연결 테스트" 커맨드를 두어 `__connection_test__` 더미 upsert로 검증하고,
-  성공하면 상태 표시줄에 초록 체크 아이콘 + "Moonkata Sync 연결됨"을 띄운다 — 안드로이드 설정 화면의
-  "연결됨" 배지와 대응.
+- **설정**: Supabase URL/publishable key는 UI 어디에도 안 보인다 — 안드로이드의 `SupabaseConfig.kt`와
+  동급으로 확장 소스에 상수로 박아둔다(§1 "시크릿 관리" 참고). `package.json`에 따로 선언할 설정 자체가
+  없음. 공유 시크릿만 커맨드 하나(`showInputBox({ password: true })` → `context.secrets.store(...)`)로
+  `vscode.SecretStorage`에 받는다.
+  - **연결 테스트 성공이 곧 동작 게이트다(안드로이드와 동일, §4 참고)** — 시크릿을 입력받는 순간부터
+    바로 동작을 시도하는 게 아니라, 별도 "Moonkata Sync: 연결 테스트" 커맨드로 `__connection_test__`
+    더미 upsert를 실제로 시도해보고 성공해야만 동작을 시작한다. 시크릿만 저장하고 테스트를 안 해봤거나
+    오타가 났으면 계속 실패할 요청을 조용히 반복하는 대신 기능이 꺼진 채로 남는다 — "검증된 시크릿"과
+    "지금 저장된 시크릿"을 (`SecretStorage`에 각각 별도 키로) 같이 들고 있다가 일치할 때만 동작하는
+    방식으로, 안드로이드의 `supabaseSharedSecret`/`supabaseVerifiedSecret` 비교와 같은 구조.
+  - 테스트 성공 시 상태 표시줄에 초록 체크 아이콘 + "Moonkata Sync 연결됨"을 띄운다 — 안드로이드 설정
+    화면의 "연결됨" 배지와 대응. 시크릿을 다시 바꾸면(재테스트 전까지) 이 표시가 사라진다.
 - **쓰기/읽기 트리거는 안드로이드와 대칭으로 맞춘다(§4 참고, 같은 이유로 재검토)** — 커서가 움직일
-  때마다 매번 올리는 건 낭비라, 안드로이드의 "체크포인트 + 화면 이탈/복귀" 모델을 그대로 따른다:
-  - **쓰기**: ① 커서가 1분 이상 같은 위치에서 안 움직이면(체크포인트 — 움직일 때마다 타이머 리셋),
-    ② 에디터/윈도우가 포커스를 잃거나(`vscode.window.onDidChangeWindowState`,
-    `vscode.window.onDidChangeActiveTextEditor`) 파일을 닫을 때 체크포인트를 기다리지 않고 즉시.
-    마지막으로 실제로 올린 오프셋을 기억해뒀다가 같은 값이면 다시 안 올림. Supabase REST(PostgREST)
-    upsert 호출 — `fetch` 하나로 충분, 별도 SDK 불필요.
-  - **읽기 & 비교**: ① `.txt` 파일을 열 때, ② 윈도우/에디터가 포커스를 다시 얻을 때(안드로이드의
-    `ON_START`/화면 복귀에 대응 — 다른 창에 갔다가 VSCode로 돌아오는 것도 포함) 같은 `relative_path`로
-    조회해서, 받아온 `char_offset`이 현재 커서 오프셋보다 크면 알림 대상.
+  때마다 매번 올리는 건 낭비라, 안드로이드의 "체크포인트 + 화면 이탈/복귀" 모델을 그대로 따른다. VSCode
+  쪽엔 "화면 이탈"에 해당하는 서로 다른 두 레이어가 있어서 **둘 다** 걸어야 한다 — 안드로이드가
+  `onCleared`(뒤로가기)와 `ON_STOP`(홈/화면꺼짐/앱전환)을 따로 걸었던 것과 같은 이유:
+  - **이 파일이 편집창에서 안 보이게 됨** — `vscode.window.onDidChangeVisibleTextEditors`로
+    `vscode.window.visibleTextEditors`에 이 문서가 더 이상 없는지 확인. 탭을 바꾸거나 파일을 닫는 것에
+    대응(안드로이드 `onCleared`에 대응). **`onDidChangeActiveTextEditor`(액티브 에디터가 바뀜)가 아니라
+    이걸 써야 한다** — 분할 편집으로 소설 파일과 코드 파일을 나란히 열어두고 그 사이에서 포커스만
+    왔다갔다 하면(코드 쪽 클릭) `onDidChangeActiveTextEditor`는 계속 발생하지만 소설 파일은 화면에
+    계속 보이고 있어서, 그 경우까지 "벗어남"으로 잡으면 안드로이드 분할화면 때와 똑같이 너무 잦아진다.
+  - **VSCode 창이 OS 포커스를 잃음** — `vscode.window.onDidChangeWindowState`의 `focused: false`.
+    알트탭, 다른 모니터 클릭, 가상 데스크톱 전환뿐 아니라 **창 최소화·Win+D(바탕화면 보기)도 여기
+    포함된다** — 최소화는 `visibleTextEditors`를 안 바꾸므로(창이 화면에서 사라지는 것과 그 창 안에서
+    어떤 탭이 보이는지는 서로 다른 레이어) 위 항목으론 안 잡히고, 이 포커스 체크만 잡아준다.
+    안드로이드 `ON_STOP`에 대응.
+  - **쓰기**: 위 두 이벤트 중 하나가 오거나, 커서가 1분 이상 같은 위치에서 안 움직이면(체크포인트 —
+    움직일 때마다 타이머 리셋) 즉시 반영. 마지막으로 실제로 올린 오프셋을 기억해뒀다가 같은 값이면
+    다시 안 올림. Supabase REST(PostgREST) upsert 호출 — `fetch` 하나로 충분, 별도 SDK 불필요.
+  - **읽기 & 비교**: ① `.txt` 파일을 열 때, ② 이 파일이 다시 편집창에 보이게 되거나
+    (`onDidChangeVisibleTextEditors`), ③ VSCode 창이 포커스를 다시 얻을 때(`focused: true`, 이 문서가
+    여전히 보이는 상태일 때) — 안드로이드 `ON_START`에 대응. 같은 `relative_path`로 조회해서, 받아온
+    `char_offset`이 현재 커서 오프셋보다 크면 알림 대상.
+  - VSCode가 여러 창(멀티 윈도우)으로 떠 있어도 확장은 창마다 독립적으로 실행되고 `focused` 상태도
+    창별로 따로 오므로 별도 처리가 필요 없다.
+  - 실제 동작(특히 최소화/Win+D가 의도대로 `focused: false`를 쏘는지)은 스테이지 3 구현 시 실기기처럼
+    직접 확인해야 한다 — 안드로이드 쪽도 실기기 검증에서 설계를 두 번 고쳤던 것과 같은 이유.
 - **알림/점프 UI**: `vscode.window.showInformationMessage`에 "이동" 액션 버튼을 붙여서, 누르면
   `editor.revealRange` + 커서를 그 오프셋(`document.positionAt(offset)`)으로 이동. 같은 파일을 계속
   열어두는 동안 반복 노출되지 않게, 마지막으로 응답한 오프셋을 세션 메모리에 기억해뒀다가 그보다 커진
@@ -304,8 +331,10 @@
    설정은 아직 없음)
 2. `SupabaseConfig` 상수(URL/publishable key) + `SecretStorage` 기반 공유 시크릿 입력 커맨드 +
    "연결 테스트" 커맨드(더미 upsert 검증, 성공 시 상태 표시줄에 초록 체크)
-3. 커서 위치 추적 → 오프셋 계산 → 체크포인트(1분 무변화) + 포커스 이탈/파일 닫기 시 즉시 쓰기(§5 참고)
-4. 파일 열기/포커스 시 조회 → 비교 → 알림 → 확인 시 커서 이동(점프)
+3. 커서 위치 추적 → 오프셋 계산 → 체크포인트(1분 무변화) + `onDidChangeVisibleTextEditors`(탭
+   전환/닫기) + `onDidChangeWindowState`(창 포커스 상실 — 최소화/Win+D 포함) 시 즉시 쓰기(§5 참고)
+4. 파일 열기 + 위 두 이벤트의 반대 방향(다시 보이게 됨/창 포커스 복귀) 시 조회 → 비교 → 알림 → 확인
+   시 커서 이동(점프)
 
 **완료 기준**: PC와 안드로이드 양쪽에서 같은 파일을 오가며 읽어도, 항상 더 멀리 읽은 쪽 위치로
 "따라잡기" 팝업/알림이 뜨고 실제로 그 위치로 이동한다.

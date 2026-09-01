@@ -193,8 +193,14 @@ class ReaderViewModel(
         checkExternalFurtherPositionNow()
     }
 
+    /**
+     * 시크릿을 입력만 하고 "연결 테스트"를 눌러본 적 없으면(혹은 마지막 검증 이후 값이 바뀌었으면)
+     * null — 검증 안 된 시크릿으로 계속 실패할 요청을 조용히 반복해서 보내는 걸 막는다. 설정 화면의
+     * "연결됨" 배지가 곧 이 기능이 실제로 켜져 있다는 뜻과 정확히 같아야 사용자가 헷갈리지 않는다.
+     */
     private fun syncClientOrNull(settings: ReaderSettings): ReadingPositionSyncClient? {
         if (settings.supabaseSharedSecret.isBlank()) return null
+        if (settings.supabaseSharedSecret != settings.supabaseVerifiedSecret) return null
         return ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, settings.supabaseSharedSecret)
     }
 
