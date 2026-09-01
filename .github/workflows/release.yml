@@ -41,12 +41,23 @@ jobs:
       - name: Decode release keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
+      # 태그(v1.1 → "1.1")를 versionName으로, 계속 늘어나기만 하는 CI 실행 번호를 versionCode로
+      # 쓴다 — 태그와 무관하게 build.gradle.kts에 박힌 고정값이 그대로 APK에 들어가던 게 원래
+      # 버그였다(Obtainium 등에서 보이는 "최신 태그"와 설치된 앱의 실제 버전 표시가 어긋남).
+      - name: Compute release version
+        id: version
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
       - name: Build release APK
         env:
           RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_VERSION_NAME: ${{ steps.version.outputs.name }}
+          RELEASE_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: ./gradlew assembleRelease
 
       - name: Remove decoded keystore

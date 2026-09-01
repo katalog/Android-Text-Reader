@@ -10,6 +10,12 @@ plugins {
 // 디버그 서명으로 폴백해 assembleRelease가 항상 그냥 돌아가게 한다.
 val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
 
+// release.yml이 태그(v1.1 → "1.1")와 CI 실행 번호로 이 두 값을 넘긴다 — 없으면(로컬 빌드) 예전
+// 고정값으로 폴백한다. 이게 없으면 어떤 태그로 릴리스를 뽑든 설치된 APK의 실제 버전 표시는 항상
+// 이 폴백값에 머물러서, Obtainium 같은 도구가 보여주는 "최신 태그"와 실제 설치 버전이 어긋난다.
+val releaseVersionName = System.getenv("RELEASE_VERSION_NAME")
+val releaseVersionCode = System.getenv("RELEASE_VERSION_CODE")?.toIntOrNull()
+
 android {
     namespace = "com.moonkata.textreader"
     compileSdk = 36
@@ -18,8 +24,8 @@ android {
         applicationId = "com.moonkata.textreader"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode ?: 1
+        versionName = releaseVersionName ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
