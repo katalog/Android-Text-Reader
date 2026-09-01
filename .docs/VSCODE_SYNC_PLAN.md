@@ -201,7 +201,7 @@
 
 ## 5. VSCode 확장
 
-- 완전히 분리된 별도 공개 저장소: [katalog/vscode-moonkata-sync](https://github.com/katalog/vscode-moonkata-sync)
+- 완전히 분리된 별도 공개 저장소: [katalog/vscode-moonkata-reader-sync](https://github.com/katalog/vscode-moonkata-reader-sync)
   (현재는 계획 단계 플레이스홀더만 있음 — README/LICENSE/package.json 스켈레톤뿐, 실제 확장 코드는
   스테이지 3에서 작성).
 - 대상: 동기화 폴더 안의 `.txt` 파일 — 워크스페이스로 열려 있든 파일 하나만 단독으로 열려 있든 동일하게
@@ -322,22 +322,35 @@
 다시 여는 과정 없이 그냥 포그라운드로 돌아오는 것만으로 "다른 기기에서 더 읽으셨어요 — 22.7% 지점"
 팝업이 떴고, "이동" 탭 시 정확히 그 위치로 이동함을 확인. 다음은 스테이지 3(VSCode 확장 구현).
 
-### 스테이지 3 — VSCode 확장 구현
+### 스테이지 3 — VSCode 확장 구현 ✅ 코드 작성 완료 (2026-09-01), 실사용 E2E는 미검증
 
-[katalog/vscode-moonkata-sync](https://github.com/katalog/vscode-moonkata-sync) 저장소(현재는 플레이스홀더)에,
-스테이지 2와 대칭되는 기능을 구현한다 (§5 상세).
+[katalog/vscode-moonkata-reader-sync](https://github.com/katalog/vscode-moonkata-reader-sync)에,
+스테이지 2와 대칭되는 기능을 구현했다 (§5 상세). 저장소 이름을 `vscode-moonkata-sync`에서
+`vscode-moonkata-reader-sync`로 변경(패키지 이름도 `moonkata-reader-sync`로 통일 — marketplace에서
+찾기 쉽게), 로컬 폴더명도 맞춤.
 
-1. 확장 프로젝트 실제 스캐폴딩 (`yo code` 등 — 지금 있는 건 최소 placeholder일 뿐, TS 빌드/테스트
-   설정은 아직 없음)
-2. `SupabaseConfig` 상수(URL/publishable key) + `SecretStorage` 기반 공유 시크릿 입력 커맨드 +
-   "연결 테스트" 커맨드(더미 upsert 검증, 성공 시 상태 표시줄에 초록 체크)
-3. 커서 위치 추적 → 오프셋 계산 → 체크포인트(1분 무변화) + `onDidChangeVisibleTextEditors`(탭
-   전환/닫기) + `onDidChangeWindowState`(창 포커스 상실 — 최소화/Win+D 포함) 시 즉시 쓰기(§5 참고)
-4. 파일 열기 + 위 두 이벤트의 반대 방향(다시 보이게 됨/창 포커스 복귀) 시 조회 → 비교 → 알림 → 확인
-   시 커서 이동(점프)
+1. ~~확장 프로젝트 실제 스캐폴딩~~ 완료 — `vscode-chapter-jumper`(같은 개발자의 기존 확장)와 동일한
+   `yo code` 스타일 구성(tsconfig/eslint/launch.json/tasks.json/test-cli)을 손으로 맞춰서 작성
+2. ~~`SupabaseConfig` 상수 + `SecretStorage` 기반 공유 시크릿 입력 커맨드 + 연결 테스트 커맨드~~ 완료
+   — `supabaseConfig.ts`, `secretManager.ts`. 안드로이드와 동일하게 "연결 테스트 성공"이 동작 게이트
+   (시크릿을 저장한 값과 마지막으로 테스트에 성공한 값이 같을 때만 동작)
+3. ~~쓰기 트리거(체크포인트 + 탭 전환/닫기 + 창 포커스 상실)~~ 완료 — `positionTracker.ts`.
+   `onDidChangeVisibleTextEditors`와 `onDidChangeWindowState`를 둘 다 거는 이유(서로 다른 레이어 —
+   분할 편집 중 포커스 이동은 전자만, 창 최소화/Win+D는 후자만 잡음)도 주석으로 남겨둠
+4. ~~읽기 트리거(파일 열기 + 다시 보이게 됨/창 포커스 복귀) + 알림/점프~~ 완료 — "파일을 처음 여는 것"과
+   "다시 보이게 되는 것"을 같은 이벤트(`onDidChangeVisibleTextEditors`)로 통합 처리하도록 설계를
+   단순화함(초기화 시 현재 보이는 에디터를 "새로 보이게 됨"으로 취급)
+5. ~~인코딩 점검 & 변환~~ 완료 — `encoding.ts`, RFC 3629 기준 수동 UTF-8 바이트 검증(오버롱/서로게이트
+   포함) + `jschardet`로 실제 인코딩 추정 + 변환 확인 다이얼로그
+
+**검증 상태**: 순수 로직(상대경로 정규화, UTF-8 검증) 단위테스트 6개를 실제 VSCode 인스턴스
+(`@vscode/test-electron`)에서 통과 확인, 확장이 활성화 에러 없이 로드되는 것도 확인. `npm run
+compile`/`lint` 클린. **다만 실제 Supabase 왕복(연결 테스트/upsert/알림/점프)과 안드로이드 앱과의
+실사용 교차 확인은 아직 안 함** — Android는 adb로 실기기를 직접 조작해 검증할 수 있었지만 VSCode는
+그런 자동화 수단이 없어서, 사용자가 직접 `F5`로 Extension Development Host를 띄워 확인해야 한다.
 
 **완료 기준**: PC와 안드로이드 양쪽에서 같은 파일을 오가며 읽어도, 항상 더 멀리 읽은 쪽 위치로
-"따라잡기" 팝업/알림이 뜨고 실제로 그 위치로 이동한다.
+"따라잡기" 팝업/알림이 뜨고 실제로 그 위치로 이동한다. **→ 코드 레벨로는 충족 예상, 실사용 검증 필요.**
 
 ### 마무리 — End-to-End 검증
 
@@ -347,8 +360,8 @@
 ## 열린 질문 (구현 착수 전 결정 필요)
 
 1. ~~VSCode 확장을 이 저장소 안에 둘지, 완전히 별도 저장소로 뺄지.~~ **결정: 완전 분리.**
-   [katalog/vscode-moonkata-sync](https://github.com/katalog/vscode-moonkata-sync)(공개)로 새로 만듦 —
-   현재는 계획 단계 플레이스홀더.
+   [katalog/vscode-moonkata-reader-sync](https://github.com/katalog/vscode-moonkata-reader-sync)(공개) —
+   스테이지 3에서 실제 구현 완료(§ 스테이지 3 참고).
 2. ~~상대 경로 정규화 규칙 확정~~ **결정: §3 "정규화 규칙 (확정)" 참고** — 구분자 `/` 통일 → NFC →
    소문자화 순으로 양쪽 클라이언트가 동일하게 적용.
 3. ~~RLS 시크릿을 앱에 어떻게 안전하게 심을지~~ **결정: §1 "시크릿 관리" 참고** — URL/publishable key는
