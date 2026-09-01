@@ -192,7 +192,7 @@ library  →  reader/{bookId}
 
 - `data/parser/ChapterJumpNavigator.kt`
 - `ReaderViewModel.next` / `previous` (`lastChapterJumpOffset`)
-- 토글 UI: `ui/reader/ReaderBottomBar.kt`, 설정: `QuickSettingsSheet.kt`
+- 토글 UI: `ui/reader/ReaderTopBar.kt`(상단바 2행), 설정: `QuickSettingsSheet.kt`
 
 **구현 요약**  
 페이지가 정착하면 `currentOffset`이 페이지 **시작**(점프 목표보다 앞)으로 맞춰질 수 있습니다. 같은 브레이크포인트를 다시 잡지 않도록 마지막 **목표 오프셋**을 따로 둡니다. 더 점프할 지점이 없으면 일반 페이지 넘김으로 폴백합니다.
@@ -218,17 +218,17 @@ library  →  reader/{bookId}
 ## 11. 읽기 제스처 · 볼륨키 · 크롬 자동 숨김
 
 **무엇을 하나**  
-화면 좌/우 탭, 좌/우 스와이프, 볼륨키를 각각 “이전/다음” 또는 “양쪽 다 다음”으로 매핑할 수 있습니다. 상·하단 바는 로딩이 끝나면 숨고, 가운데 탭으로 토글됩니다.
+화면 좌/우 탭, 좌/우 스와이프, 볼륨키를 각각 “이전/다음” 또는 “양쪽 다 다음”으로 매핑할 수 있습니다. 상단바(하단바는 없음)는 로딩이 끝나면 숨고, 가운데 탭으로 토글됩니다. 상단바가 숨겨진 동안에도 읽은 비율을 놓치지 않도록 화면 구석에 작은 퍼센트 표시가 따로 뜹니다.
 
 **파일**
 
-- `ui/reader/ReaderScreen.kt` — 탭 존, 스와이프, `volumeKeyHandler`, `showChrome`
+- `ui/reader/ReaderScreen.kt` — 탭 존, 스와이프, `volumeKeyHandler`, `showChrome`, 크롬 숨김 중 구석 퍼센트 표시
 - `MainActivity.onKeyDown`
 - 매핑 enum: `TouchTurnMode`, `SwipeTurnMode` in `ReaderSettings.kt`
-- 상단바: `ui/reader/ReaderTopBar.kt` (뒤로, 검색, 목차, 설정)
+- 상단바(2행): `ui/reader/ReaderTopBar.kt` — 1행: 뒤로 · 파일명 · 설정, 2행: 목차 · 검색 · 챕터점프 토글
 
 **구현 요약**  
-볼륨키는 Activity가 가로채 `ReaderScreen`의 DisposableEffect가 등록한 람다에 넘깁니다. true면 시스템 볼륨 토스트가 안 뜹니다.
+볼륨키는 Activity가 가로채 `ReaderScreen`의 DisposableEffect가 등록한 람다에 넘깁니다. true면 시스템 볼륨 토스트가 안 뜹니다. 상단바는 `Surface` 안에 `TopAppBar`(1행)와 그 아래 `Row`(2행)를 세로로 쌓은 구조입니다 — 예전에 있던 별도 하단바(프로그레스바 + 퍼센트)는 삭제했고, 챕터점프 토글만 2행으로 옮겨왔습니다.
 
 ---
 
