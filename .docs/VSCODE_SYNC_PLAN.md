@@ -48,9 +48,13 @@
   | `encoding` | text, nullable | 오프셋 계산에 쓴 인코딩 (참고/디버깅용) |
   | `updated_at` | timestamptz | 기본값 `now()` |
 
-- **보안 — RLS + 커스텀 시크릿**: `anon` key는 공개 저장소의 VSCode 확장 소스나 디컴파일 가능한 APK에
-  노출될 수 있는 값이라, RLS(Row Level Security)를 켜고 커스텀 시크릿(요청 헤더 등)을 검사하는 정책을
-  둔다 — 데이터 자체는 민감도가 낮지만(그냥 소설 읽은 위치), 아무나 읽고 쓸 수 있는 상태는 피한다.
+- **보안 — RLS + 커스텀 시크릿**: 클라이언트에 넣는 키(2026년 기준 Supabase 신규 키 체계로는
+  `publishable key`, `sb_publishable_...` — 예전 `anon` key와 같은 역할이고 이 문서에서도 이후
+  "publishable key"로 통일해 부른다. **`secret key`(`sb_secret_...`, 예전 `service_role`)는 RLS를
+  통째로 우회하므로 앱/확장 어디에도 절대 넣지 않는다.**)는 공개 저장소의 VSCode 확장 소스나 디컴파일
+  가능한 APK에 노출될 수 있는 값이라, RLS(Row Level Security)를 켜고 커스텀 시크릿(요청 헤더 등)을
+  검사하는 정책을 둔다 — 데이터 자체는 민감도가 낮지만(그냥 소설 읽은 위치), 아무나 읽고 쓸 수 있는
+  상태는 피한다.
 
 - **시크릿 관리 (§열린 질문 3 결론) — 빌드에 굽지 않고 설정 화면에서 입력받는다.** 처음엔 릴리스
   키스토어처럼 빌드 시점에 CI 시크릿으로 주입하는 방식을 계획했는데, 그러면 컴파일된 APK/vsix
@@ -61,7 +65,7 @@
   동작한다.
   - **UI/구현 복잡도는 낮다** — 오히려 이전 계획(CI 레포 시크릿 + 릴리스 워크플로우 주입)보다 단순해짐:
     - **안드로이드**: 기존 설정 화면 계열(`QuickSettingsSheet.kt` 근처, 혹은 별도 "동기화 설정" 섹션)에
-      텍스트 필드 3개(Supabase URL / anon key / 공유 시크릿) 추가하고 DataStore에 저장 — 앱이 폰트·여백·
+      텍스트 필드 3개(Supabase URL / publishable key / 공유 시크릿) 추가하고 DataStore에 저장 — 앱이 폰트·여백·
       테마 같은 다른 설정을 다루는 것과 완전히 같은 패턴이라 새로 익힐 것이 없다.
     - **VSCode**: 오히려 더 쉽다 — `package.json`의 `contributes.configuration`에 설정 3개만 선언하면
       VSCode 기본 설정 화면이 자동으로 생겨서 커스텀 UI 코드 자체가 필요 없다(`vscode-chapter-jumper`의
@@ -143,7 +147,7 @@
   따름, `AppDatabase.kt`).
 - REST 클라이언트 하나 추가(예: `data/sync/ReadingPositionSyncClient.kt`) — OkHttp 등으로 PostgREST
   엔드포인트에 직접 GET/PATCH(upsert)만 하면 되므로 가볍게.
-- **설정 화면**: Supabase URL / anon key / 공유 시크릿을 입력받는 텍스트 필드 3개를 설정 UI에 추가하고
+- **설정 화면**: Supabase URL / publishable key / 공유 시크릿을 입력받는 텍스트 필드 3개를 설정 UI에 추가하고
   DataStore(`ReaderSettingsRepository`)에 저장(§1 "시크릿 관리" 참고). 세 값이 모두 채워져야 이 기능이
   켜짐.
 - **읽기**: 책을 열 때(`ReaderViewModel.loadBook` 이후) `relativePath`로 조회 → 받아온 `char_offset`이
@@ -172,7 +176,7 @@
   선택한 경로는 `moonkataSync.syncRootPath`에 저장해 다음부터는 다시 안 물어봄(설정 화면에서 나중에
   변경 가능). 파일이 그 루트 바깥이면 기능을 건너뛴다.
 - **설정**: `package.json`의 `contributes.configuration`에 `moonkataSync.supabaseUrl`(일반 설정)을
-  선언하고, anon key/공유 시크릿은 `vscode.SecretStorage`로 받는다(커맨드 하나로
+  선언하고, publishable key/공유 시크릿은 `vscode.SecretStorage`로 받는다(커맨드 하나로
   `showInputBox({ password: true })` → `context.secrets.store(...)`, §1 "시크릿 관리" 참고). 세 값이
   모두 있어야 기능이 켜짐 — VSCode 설정 화면에 커스텀 UI를 따로 만들 필요는 없다.
 - **쓰기**: 커서 이동마다 바로 올리면 API 호출이 너무 잦음 — 이 앱이 위치 저장에 쓰는 500ms 디바운스
@@ -206,27 +210,30 @@
 
 ## 페이즈별 구현 계획
 
-### 스테이지 1 — Supabase 설정 + 값 가져오기
+### 스테이지 1 — Supabase 설정 + 값 가져오기 ✅ 완료 (2026-09-01)
 
 클라이언트(앱/확장) 코드를 하나도 안 짜고, 백엔드만 먼저 완성해서 검증한다.
 
-1. Supabase 프로젝트 생성, `reading_positions` 테이블 생성 (§1 스키마)
-2. RLS + 공유 시크릿 검사 정책 설정 (§1 보안) — 이 시크릿값 자체는 빌드에 안 넣고 앱/확장 설정 화면에서
-   입력받을 값이므로(§1 "시크릿 관리"), 여기서는 정책만 만들어두고 실제 값은
-   `S:\DATA\Dev\Git-Privates\Keys`에 개인 보관
+1. ~~Supabase 프로젝트 생성, `reading_positions` 테이블 생성~~ 완료
+2. ~~RLS + 공유 시크릿 검사 정책 설정~~ 완료 — 시크릿값 자체는 빌드에 안 넣고 앱/확장 설정 화면에서
+   입력받을 값이므로(§1 "시크릿 관리"), 실제 값은 `S:\DATA\Dev\Git-Privates\Keys\android_keys\`에
+   개인 보관 (`text-reader-supabase-setup.md`, `text-reader-supabase-secret.pass`,
+   `text-reader-supabase-schema.sql`)
 3. ~~`relative_path` 정규화 규칙 확정~~ 완료 (§3 참고) — 스테이지 2/3 구현이 그대로 따르면 됨
-4. curl/Postman 등으로 수동 upsert/select 호출을 날려서, 스키마·RLS·인증이 실제로 의도대로 동작하는지
-   확인 (예: 가짜 `relative_path`로 행 하나 넣고 다시 읽어보기, 시크릿 없이 호출하면 거부되는지 확인)
+4. ~~curl로 수동 upsert/select 검증~~ 완료 — 시크릿 없이 조회 시 `[]`(RLS 차단 정상 동작), 시크릿 포함
+   upsert/조회/삭제 전부 의도대로 동작 확인함. 참고: Supabase가 최근 키 체계를 `anon`/`service_role`에서
+   `publishable`/`secret`로 바꿔서(§1 참고), 신규 키는 `apikey` 헤더에만 넣어야 하고
+   `Authorization: Bearer`엔 넣으면 안 됨(JWT가 아니라서 거부됨) — 예전 안내와 다른 부분이라 기록.
 
 **완료 기준**: 클라이언트 코드 없이도, curl 같은 도구로 그 프로젝트 테이블에 있는 값을 안정적으로
-넣고 가져올 수 있다.
+넣고 가져올 수 있다. **→ 충족.** 다음은 스테이지 2(안드로이드 앱 구현).
 
 ### 스테이지 2 — 안드로이드 앱 구현
 
 스테이지 1에서 검증된 스펙을 그대로 따라 앱에 읽기+쓰기+팝업+점프를 전부 구현한다 (§4 상세).
 
 1. `BookEntity.relativePath` 추가 + Room 마이그레이션(2→3) + `LibraryViewModel`에서 상대 경로 계산/전달
-2. 설정 화면에 Supabase URL/anon key/공유 시크릿 입력 필드 추가 + DataStore 저장
+2. 설정 화면에 Supabase URL/publishable key/공유 시크릿 입력 필드 추가 + DataStore 저장
 3. 안드로이드 REST 클라이언트(`data/sync/ReadingPositionSyncClient.kt` 등)
 4. 쓰기 — 기존 디바운스 위치 저장(`schedulePositionWrite`)에 Supabase upsert 연결
 5. 읽기/비교 — 책 열 때 조회, 로컬 오프셋과 비교
@@ -243,7 +250,7 @@
 
 1. 확장 프로젝트 실제 스캐폴딩 (`yo code` 등 — 지금 있는 건 최소 placeholder일 뿐, TS 빌드/테스트
    설정은 아직 없음)
-2. 설정(`moonkataSync.supabaseUrl`) + `SecretStorage` 기반 anon key/공유 시크릿 입력 커맨드
+2. 설정(`moonkataSync.supabaseUrl`) + `SecretStorage` 기반 publishable key/공유 시크릿 입력 커맨드
 3. 커서 위치 추적 → 오프셋 계산 → 디바운스 저장(쓰기)
 4. 파일 열기/포커스 시 조회 → 비교 → 알림 → 확인 시 커서 이동(점프)
 
