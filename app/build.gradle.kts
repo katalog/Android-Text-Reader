@@ -5,6 +5,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// 릴리스 키스토어는 이 저장소(공개)에 절대 커밋하지 않는다 — 환경 변수로만 넘긴다.
+// RELEASE_KEYSTORE_PATH가 없으면(포크한 사람의 로컬 빌드, 이 시크릿을 안 넣은 CI 등) 조용히
+// 디버그 서명으로 폴백해 assembleRelease가 항상 그냥 돌아가게 한다.
+val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+
 android {
     namespace = "com.moonkata.textreader"
     compileSdk = 36
@@ -22,13 +27,21 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // 이 프로젝트는 Play 스토어에 올리지 않고 GitHub Release에서 APK를 직접 배포하는 용도라,
-            // 별도 릴리스 키스토어 없이 디버그 서명 그대로 쓴다 — CI에서도 추가 시크릿 설정 없이
-            // ./gradlew assembleRelease만으로 설치 가능한 APK가 나온다.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystorePath != null) "release" else "debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
