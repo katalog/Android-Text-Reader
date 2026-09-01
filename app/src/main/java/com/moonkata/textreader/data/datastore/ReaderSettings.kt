@@ -49,4 +49,11 @@ data class ReaderSettings(
     val touchTurnMode: TouchTurnMode = TouchTurnMode.STANDARD,
     val swipeTurnMode: SwipeTurnMode = SwipeTurnMode.STANDARD,
     val pageTransitionAnimation: PageTransitionAnimation = PageTransitionAnimation.NONE,
+    // VSCode 읽기 위치 동기화(.docs/VSCODE_SYNC_PLAN.md) — Supabase URL/publishable key는 어차피
+    // 공개돼도 되는 값(RLS가 실제 방어선)이라 SupabaseConfig에 고정값으로 박아두고, 여기 설정에는
+    // 진짜 지켜야 하는 공유 시크릿만 둔다(§1 "시크릿 관리" 결정).
+    val supabaseSharedSecret: String = "",
+    /** 마지막으로 연결 테스트에 성공한 시크릿 값 — [supabaseSharedSecret]과 같을 때만 "연결됨" 표시.
+     * 시크릿을 바꾸면 자동으로 이 값과 달라지므로 별도 무효화 로직 없이 자연스럽게 재검증을 요구한다. */
+    val supabaseVerifiedSecret: String = "",
 )

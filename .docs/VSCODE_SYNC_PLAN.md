@@ -56,34 +56,37 @@
   검사하는 정책을 둔다 — 데이터 자체는 민감도가 낮지만(그냥 소설 읽은 위치), 아무나 읽고 쓸 수 있는
   상태는 피한다.
 
-- **시크릿 관리 (§열린 질문 3 결론) — 빌드에 굽지 않고 설정 화면에서 입력받는다.** 처음엔 릴리스
-  키스토어처럼 빌드 시점에 CI 시크릿으로 주입하는 방식을 계획했는데, 그러면 컴파일된 APK/vsix
-  안에 값이 그대로 남아(키스토어 비밀번호는 서명에만 쓰이고 결과물엔 안 남는 것과 달리, Supabase 값은
-  앱이 런타임에 그 값으로 API를 호출해야 하므로 바이너리에 박힘) 디컴파일하면 누구나 뽑아낼 수 있다는
-  한계가 있었다 — 그래서 **아예 빌드에 넣지 않고, 앱/확장을 설치한 뒤 설정 화면에서 직접 입력받는
-  방식으로 변경.** 값이 없으면 원래 계획대로 기능이 조용히 비활성화되고(§4/§5), 입력하는 순간부터
-  동작한다.
-  - **UI/구현 복잡도는 낮다** — 오히려 이전 계획(CI 레포 시크릿 + 릴리스 워크플로우 주입)보다 단순해짐:
-    - **안드로이드**: 기존 설정 화면 계열(`QuickSettingsSheet.kt` 근처, 혹은 별도 "동기화 설정" 섹션)에
-      텍스트 필드 3개(Supabase URL / publishable key / 공유 시크릿) 추가하고 DataStore에 저장 — 앱이 폰트·여백·
-      테마 같은 다른 설정을 다루는 것과 완전히 같은 패턴이라 새로 익힐 것이 없다.
-    - **VSCode**: 오히려 더 쉽다 — `package.json`의 `contributes.configuration`에 설정 3개만 선언하면
-      VSCode 기본 설정 화면이 자동으로 생겨서 커스텀 UI 코드 자체가 필요 없다(`vscode-chapter-jumper`의
-      `configuration` 항목과 같은 패턴). 다만 시크릿 값 자체는 평범한 텍스트 설정(설정.json에 평문 저장,
-      Settings Sync로 클라우드에도 올라갈 수 있음)보다는 **`vscode.SecretStorage` API**(OS 자격 증명
-      저장소에 암호화 저장)로 받는 게 맞다 — 입력받는 커맨드 하나(`showInputBox({ password: true })` →
-      `context.secrets.store(...)`)만 추가하면 되는 표준 패턴이라 어렵지 않다. URL처럼 민감하지 않은
-      값은 일반 설정으로 둬도 무방.
-  - **CI 시크릿 주입 파이프라인은 더 이상 필요 없다** — `vscode-moonkata-sync`에 릴리스 워크플로우를
-    새로 만들 필요도, `Android-Text-Reader`/`vscode-moonkata-sync`에 레포 시크릿을 등록할 필요도
-    없어짐(계획이 단순해짐). `S:\DATA\Dev\Git-Privates\Keys`는 여전히 유용하다 — 개발자 본인이 로컬
-    개발 중이거나, 앱/확장을 새로 설치했을 때 설정 화면에 붙여넣을 값을 보관해두는 개인 사본 용도로.
-  - **진짜 보안 이득**: 공개 배포되는 APK/vsix 자체에는 이 값들이 전혀 들어가지 않으므로, 디컴파일해도
-    아무것도 안 나온다 — 이전 방식의 "컴파일된 결과물 안에 남는다"는 한계가 완전히 해소된다.
-  - **트레이드오프**: 이 앱을 공개 저장소에서 받아 설치하는 다른 사람들은 이 3개 값을 알 방법이 없으니
-    (개발자 개인 Supabase 프로젝트의 자격 증명이라 공유하지 않음), 그 사람들에게는 이 동기화 기능이
-    그냥 계속 꺼진 채로 남는다 — 원래 이 기능이 개발자 본인의 PC/폰 두 기기용으로 만드는 것이라 이 정도
-    제약은 문제 되지 않는다.
+- **시크릿 관리 (§열린 질문 3 결론, 스테이지 2 구현 중 재검토) — URL/publishable key는 소스에 고정값으로
+  박아두고, 공유 시크릿만 설정 화면에서 입력받는다.** 처음엔 셋 다 빌드에 안 굽고 설정 화면에서 입력받는
+  안이었는데, 다시 보니 URL/publishable key는 애초에 클라이언트에 노출되는 걸 전제로 설계된 값(실제
+  방어선은 RLS)이라 굳이 사용자가 매번 입력할 이유가 없었다 — **`SupabaseConfig`(안드로이드) /
+  동급 상수 파일(VSCode)에 고정값으로 커밋**하고, 진짜 지켜야 하는 공유 시크릿만 사용자가 입력하는
+  값으로 남긴다.
+  - **설정 UI는 필드 1개 + 버튼 1개로 줄어든다**:
+    - **안드로이드**: `QuickSettingsSheet`에 "공유 시크릿" 텍스트 필드 하나 + "연결 테스트" 버튼.
+      테스트가 성공하면 그 시크릿 값을 `supabaseVerifiedSecret`으로 같이 커밋하고, 초록 체크 + "연결됨"
+      표시. 시크릿을 다시 바꾸면 `supabaseSharedSecret != supabaseVerifiedSecret`이 되어 체크가 자동으로
+      사라진다(별도 무효화 로직 없이 비교만으로 처리 — 같은 값을 다시 넣으면 재테스트 없이도 다시
+      "연결됨"으로 돌아옴, 실기기 확인).
+    - **VSCode도 동일한 패턴으로**: `package.json`의 `contributes.configuration`에는 이제 아무것도
+      선언할 필요 없음(URL/publishable key는 상수, 시크릿은 아래처럼 `SecretStorage`). 시크릿 입력은
+      커맨드 하나(`showInputBox({ password: true })` → `context.secrets.store(...)`), 별도로
+      "Moonkata Sync: 연결 테스트" 커맨드를 두어 같은 더미 upsert 방식으로 검증하고, 성공하면
+      상태 표시줄(status bar item)에 초록 체크 아이콘 + "Moonkata Sync 연결됨"을 띄운다(안드로이드의
+      "연결됨" 배지와 동급 UX).
+  - **연결 테스트는 조회가 아니라 upsert로 한다**: 단순 SELECT로는 검증이 안 된다 — RLS가 막은 SELECT는
+    에러가 아니라 빈 배열을 돌려주므로(§ curl 검증 때 이미 확인), "행이 없어서 비었나 시크릿이 틀려서
+    비었나"를 구분할 수 없다. 대신 고정된 더미 경로(`__connection_test__`)로 upsert를 시도하면, RLS를
+    어길 때 PostgREST가 401/403으로 명확히 거부하므로 이 차이로 성공/실패를 판별한다
+    (`ReadingPositionSyncClient.testConnection()`).
+  - **진짜 보안 이득은 그대로 유지된다**: 공유 시크릿은 여전히 빌드에 안 들어가고 설정 화면에서만
+    입력받으므로, 디컴파일해도 이 값만큼은 안 나온다. URL/publishable key가 공개 소스에 커밋되는 건
+    Supabase 자체가 그렇게 쓰라고 설계한 값이라 문제 없음.
+  - **트레이드오프는 그대로**: 공개 저장소에서 앱/확장을 받은 다른 사람은 이 공유 시크릿을 모르니
+    동기화 기능이 계속 꺼진 채로 남는다 — 원래 개발자 본인의 PC/폰 2대용 개인 기능이라 문제 없음.
+  - `S:\DATA\Dev\Git-Privates\Keys`는 여전히 개발자 본인이 설정 화면에 붙여넣을 시크릿 사본을 보관하는
+    용도로 유용하다. CI 레포 시크릿/릴리스 워크플로우는 필요 없음(URL/publishable key는 소스에 직접
+    있고, 공유 시크릿은 애초에 빌드에 안 들어감).
 
 - **무료 티어 용량 검토**: 이 테이블은 로그가 아니라 책마다 행 하나를 upsert하는 구조라 저장 용량(500MB)은
   사용자가 아무리 늘어도 사실상 문제되지 않는다(수천 명이 써도 수십 MB 수준). 진짜 변수는 월 5GB
@@ -145,21 +148,51 @@
 
 - `BookEntity`에 `relativePath: String` 추가, Room 마이그레이션 2→3 (기존 `MIGRATION_1_2` 패턴 그대로
   따름, `AppDatabase.kt`).
-- REST 클라이언트 하나 추가(예: `data/sync/ReadingPositionSyncClient.kt`) — OkHttp 등으로 PostgREST
-  엔드포인트에 직접 GET/PATCH(upsert)만 하면 되므로 가볍게.
-- **설정 화면**: Supabase URL / publishable key / 공유 시크릿을 입력받는 텍스트 필드 3개를 설정 UI에 추가하고
-  DataStore(`ReaderSettingsRepository`)에 저장(§1 "시크릿 관리" 참고). 세 값이 모두 채워져야 이 기능이
-  켜짐.
-- **읽기**: 책을 열 때(`ReaderViewModel.loadBook` 이후) `relativePath`로 조회 → 받아온 `char_offset`이
-  `book.lastReadCharOffset`보다 크면 팝업 대상.
-- **쓰기**: 앱이 이미 위치를 저장하는 지점(`schedulePositionWrite`/`flushPendingPosition`, 500ms
-  디바운스)에 Supabase upsert 호출을 얹는다. 로컬 Room 저장과는 완전히 분리된 best-effort 호출 — 실패
-  (오프라인 등)해도 로컬 저장/읽기 흐름에는 전혀 영향 없음.
+- REST 클라이언트(`data/sync/ReadingPositionSyncClient.kt`) — `HttpURLConnection` + `org.json` 기반,
+  `FontDownloadManager`와 같은 무의존성 패턴(OkHttp 추가 안 함).
+- `data/sync/SupabaseConfig.kt` — Supabase URL/publishable key 고정값(§1 "시크릿 관리" 참고, 공개
+  소스에 그대로 커밋해도 되는 값).
+- **설정 화면**: `QuickSettingsSheet`에 "공유 시크릿" 텍스트 필드 1개 + "연결 테스트" 버튼. 테스트 성공
+  시 `ReaderSettings.supabaseVerifiedSecret`에 그 값을 같이 커밋하고 초록 체크 + "연결됨" 표시(§1
+  참고). 시크릿 입력 필드는 포커스 상실(blur)이 아니라 시트가 닫히는 시점(`onDismissRequest`)에
+  한 번에 커밋 — blur 이벤트로 커밋하는 방식은 실기기에서 뒤로가기로 시트를 닫을 때 커밋이 누락되는
+  걸 확인하고 폐기함.
+- **로컬 저장과 원격 동기화 트리거를 분리한다 (구현 중 재검토 후 확정)** — 처음엔 로컬 저장(500ms
+  디바운스)에 얹어서 페이지/문단이 바뀔 때마다 원격에도 매번 올렸는데, 로컬은 그래도 되지만(그냥 로컬
+  DB 쓰기라 거의 공짜) 원격은 네트워크 호출이라 페이지 넘길 때마다 올리면 낭비다. 그래서:
+  - **읽기(비교)**: ① 책을 열 때(`ReaderViewModel.loadBook`) 한 번, ② 리더 화면이 다시 보이게 될
+    때(`ON_START` — 화면 잠금 해제, 다른 앱에서 돌아옴)마다 다시 확인. 읽는 도중 계속 폴링하지 않는다 —
+    "화면을 다시 보게 된 시점"에만 다른 기기 위치가 궁금해지므로. 받아온 `char_offset`이 현재 오프셋보다
+    크면 팝업 대상(`checkExternalFurtherPositionNow`, `onReaderResumed`).
+  - **쓰기**: 페이지/문단이 바뀔 때마다 매번 올리지 않고, 아래 두 경로로만 원격에 반영한다
+    (`scheduleRemoteSyncCheckpoint`, `syncNowToRemote`, `pushRemoteSync`):
+    1. 같은 위치에서 1분 이상 머무르면(체크포인트 — 오프셋이 바뀔 때마다 60초 타이머를 리셋)
+    2. 리더 화면을 벗어나는 시점 — 뒤로가기(`ReaderViewModel.onCleared`)나 화면 꺼짐/홈/다른 앱 전환
+       (`ON_STOP`, `ReaderScreen`의 lifecycle observer)에서 체크포인트를 기다리지 않고 즉시 반영.
+       이 두 이벤트가 정확히 다른 상황을 커버한다 — Navigation-Compose로 같은 액티비티 안에서
+       뒤로가기하면 `ON_STOP`은 안 오고 `onCleared`만 오고, 화면 꺼짐/홈/앱 전환은 액티비티가 살아있는
+       채로 멈추는 거라 `ON_STOP`만 오고 `onCleared`는 안 옴.
+    - 마지막으로 실제 원격에 반영한 오프셋을 기억해뒀다가(`lastRemoteSyncedOffset`) 같은 값이면 다시
+      안 올려서 불필요한 호출을 줄인다.
+  - **`ON_STOP`/`ON_START` 대신 `ON_PAUSE`/`ON_RESUME`을 쓰는 안은 검토 후 기각.** 분할 화면
+    (멀티윈도우)에서 다른 창으로 포커스만 옮기는 경우는 `ON_STOP`이 안 오고 `ON_PAUSE`만 오기 때문에
+    지금 방식으론 못 잡는다 — 알고 있는 갭. 하지만 `ON_PAUSE`/`ON_RESUME`으로 바꾸면, 사용자가 최근 앱
+    화면을 스와이프로 잠깐 열었다 그냥 닫기만 해도(실제로 앱을 전환 안 해도) `onPause`→`onResume`이
+    발생해 그때마다 원격 조회가 나간다 — 권한 요청 다이얼로그가 떴다 닫힐 때도 마찬가지. 소설 리더를
+    분할 화면으로 쓰는 사람은 드문데, 그 드문 경우 하나 잡으려고 훨씬 흔한 제스처마다 불필요한 조회가
+    나가는 걸 감수할 가치가 없다고 판단해 `ON_STOP`/`ON_START`를 그대로 유지.
+  - 로컬 Room 저장과는 완전히 분리된 best-effort 호출 — 실패(오프라인 등)해도 로컬 저장/읽기 흐름에는
+    전혀 영향 없음. `viewModelScope`가 아니라 `GlobalScope`로 분리해서 실행 — `onCleared`의
+    `runBlocking` 시점엔 `viewModelScope`가 이미 취소돼 있어, 화면을 벗어나는 순간의 위치(동기화가
+    가장 필요한 시점)가 안 나갈 뻔한 걸 실기기 검증 중 발견하고 고침.
+  - 실기기로 End-to-End 확인함: 페이지를 넘겨도 60초 안에는 원격에 안 올라가고, 뒤로가기하면 즉시
+    올라가고, 홈 버튼으로 백그라운드 보낸 동안 원격 위치를 바꿔두면 앱을 다시 열 때(재실행 없이 그냥
+    포그라운드 복귀만 해도) 팝업이 뜬다.
 - **팝업 UI**: 기존 "이어서 읽기" 다이얼로그(`ui/library/LibraryScreen.kt`의 `ResumeReadingDialog`)와
   같은 패턴. 확인 시 기존 `jumpToOffset` 재사용. 같은 프로세스에서 그 책에 대해 한 번 응답하면(확인이든
   취소든) 재노출 안 함.
-- 네트워크 실패/설정 안 됨(Supabase 키 미설정 등)은 조용히 기능 비활성화 — 앱 기본 동작(오프라인)엔
-  영향 없음. 설정 화면에서 세 값을 입력하는 순간부터 별도 재시작 없이 동작 시작.
+- 네트워크 실패/시크릿 미설정은 조용히 기능 비활성화 — 앱 기본 동작(오프라인)엔 영향 없음. 연결 테스트
+  성공 순간부터 별도 재시작 없이 동작 시작.
 
 ## 5. VSCode 확장
 
@@ -175,15 +208,22 @@
   입력보다 훨씬 덜 번거로움), 워크스페이스 폴더가 열려 있으면 그 경로를 다이얼로그의 시작 위치로 제안.
   선택한 경로는 `moonkataSync.syncRootPath`에 저장해 다음부터는 다시 안 물어봄(설정 화면에서 나중에
   변경 가능). 파일이 그 루트 바깥이면 기능을 건너뛴다.
-- **설정**: `package.json`의 `contributes.configuration`에 `moonkataSync.supabaseUrl`(일반 설정)을
-  선언하고, publishable key/공유 시크릿은 `vscode.SecretStorage`로 받는다(커맨드 하나로
-  `showInputBox({ password: true })` → `context.secrets.store(...)`, §1 "시크릿 관리" 참고). 세 값이
-  모두 있어야 기능이 켜짐 — VSCode 설정 화면에 커스텀 UI를 따로 만들 필요는 없다.
-- **쓰기**: 커서 이동마다 바로 올리면 API 호출이 너무 잦음 — 이 앱이 위치 저장에 쓰는 500ms 디바운스
-  패턴과 동일하게 하고, 포커스를 잃거나 파일을 닫을 때 즉시 flush. Supabase REST(PostgREST) upsert
-  호출 — `fetch` 하나로 충분, 별도 SDK 불필요.
-- **읽기 & 비교**: `.txt` 파일을 열거나 에디터 포커스를 얻을 때 같은 `relative_path`로 조회해서, 받아온
-  `char_offset`이 현재 커서 오프셋보다 크면 알림 대상.
+- **설정**: Supabase URL/publishable key는 안드로이드의 `SupabaseConfig.kt`와 동급으로 확장 소스에
+  상수로 박아둔다(§1 "시크릿 관리" 참고) — `package.json`에 따로 선언할 설정 자체가 없음. 공유 시크릿만
+  커맨드 하나(`showInputBox({ password: true })` → `context.secrets.store(...)`)로 `vscode.SecretStorage`에
+  받는다. 별도로 "Moonkata Sync: 연결 테스트" 커맨드를 두어 `__connection_test__` 더미 upsert로 검증하고,
+  성공하면 상태 표시줄에 초록 체크 아이콘 + "Moonkata Sync 연결됨"을 띄운다 — 안드로이드 설정 화면의
+  "연결됨" 배지와 대응.
+- **쓰기/읽기 트리거는 안드로이드와 대칭으로 맞춘다(§4 참고, 같은 이유로 재검토)** — 커서가 움직일
+  때마다 매번 올리는 건 낭비라, 안드로이드의 "체크포인트 + 화면 이탈/복귀" 모델을 그대로 따른다:
+  - **쓰기**: ① 커서가 1분 이상 같은 위치에서 안 움직이면(체크포인트 — 움직일 때마다 타이머 리셋),
+    ② 에디터/윈도우가 포커스를 잃거나(`vscode.window.onDidChangeWindowState`,
+    `vscode.window.onDidChangeActiveTextEditor`) 파일을 닫을 때 체크포인트를 기다리지 않고 즉시.
+    마지막으로 실제로 올린 오프셋을 기억해뒀다가 같은 값이면 다시 안 올림. Supabase REST(PostgREST)
+    upsert 호출 — `fetch` 하나로 충분, 별도 SDK 불필요.
+  - **읽기 & 비교**: ① `.txt` 파일을 열 때, ② 윈도우/에디터가 포커스를 다시 얻을 때(안드로이드의
+    `ON_START`/화면 복귀에 대응 — 다른 창에 갔다가 VSCode로 돌아오는 것도 포함) 같은 `relative_path`로
+    조회해서, 받아온 `char_offset`이 현재 커서 오프셋보다 크면 알림 대상.
 - **알림/점프 UI**: `vscode.window.showInformationMessage`에 "이동" 액션 버튼을 붙여서, 누르면
   `editor.revealRange` + 커서를 그 오프셋(`document.positionAt(offset)`)으로 이동. 같은 파일을 계속
   열어두는 동안 반복 노출되지 않게, 마지막으로 응답한 오프셋을 세션 메모리에 기억해뒀다가 그보다 커진
@@ -228,20 +268,32 @@
 **완료 기준**: 클라이언트 코드 없이도, curl 같은 도구로 그 프로젝트 테이블에 있는 값을 안정적으로
 넣고 가져올 수 있다. **→ 충족.** 다음은 스테이지 2(안드로이드 앱 구현).
 
-### 스테이지 2 — 안드로이드 앱 구현
+### 스테이지 2 — 안드로이드 앱 구현 ✅ 완료 (2026-09-01)
 
 스테이지 1에서 검증된 스펙을 그대로 따라 앱에 읽기+쓰기+팝업+점프를 전부 구현한다 (§4 상세).
 
-1. `BookEntity.relativePath` 추가 + Room 마이그레이션(2→3) + `LibraryViewModel`에서 상대 경로 계산/전달
-2. 설정 화면에 Supabase URL/publishable key/공유 시크릿 입력 필드 추가 + DataStore 저장
-3. 안드로이드 REST 클라이언트(`data/sync/ReadingPositionSyncClient.kt` 등)
-4. 쓰기 — 기존 디바운스 위치 저장(`schedulePositionWrite`)에 Supabase upsert 연결
-5. 읽기/비교 — 책 열 때 조회, 로컬 오프셋과 비교
-6. 팝업 UI — "이어서 읽기" 다이얼로그 패턴 재사용, 확인 시 `jumpToOffset`
+1. ~~`BookEntity.relativePath` 추가 + Room 마이그레이션(2→3) + `LibraryViewModel`에서 상대 경로 계산/전달~~ 완료
+2. ~~설정 화면에 공유 시크릿 입력 필드 + 연결 테스트 버튼 추가~~ 완료 — `QuickSettingsSheet`에 로컬
+   초안 상태 + 시트 닫힐 때 커밋하는 방식(포커스 상실 이벤트에 기대는 방식은 실기기에서 뒤로가기 시
+   커밋 누락이 확인돼 폐기), 연결 테스트 성공 시 초록 체크 + "연결됨" 표시(§1 참고 — URL/publishable
+   key는 `SupabaseConfig.kt` 고정값으로 굳이 입력받을 필요 없다는 걸 구현 중 재검토 후 UI에서 뺌)
+3. ~~안드로이드 REST 클라이언트~~ 완료 — `data/sync/ReadingPositionSyncClient.kt`, `HttpURLConnection` +
+   `org.json` 기반(기존 `FontDownloadManager`와 같은 무의존성 패턴)
+4. ~~쓰기~~ 완료 — 처음엔 로컬 저장(500ms 디바운스)에 얹어 페이지 넘길 때마다 원격까지 같이 올렸는데,
+   페이지 이동마다 네트워크 호출이 나가는 게 낭비라는 지적을 받고 **체크포인트(1분 무변화) + 화면
+   이탈 시 즉시(뒤로가기 → `onCleared`, 화면 꺼짐/홈/앱 전환 → `ON_STOP`)** 모델로 재설계함(§4 상세).
+   `viewModelScope`가 아니라 `GlobalScope`로 분리해서 실행 — `onCleared`의 `runBlocking` 시점엔
+   `viewModelScope`가 이미 취소돼 있어 화면을 벗어나는 순간의 위치가 안 나갈 뻔한 문제를 실기기 검증
+   중 발견하고 수정.
+5. ~~읽기/비교~~ 완료 — 처음엔 책 열 때 한 번뿐이었는데, 화면이 잠겼다 켜지거나 다른 앱에서 돌아올
+   때(`ON_START`)도 다시 확인하도록 확장(§4 상세, `checkExternalFurtherPositionNow`/`onReaderResumed`)
+6. ~~팝업 UI~~ 완료 — `ReaderScreen`에 `AlertDialog` 추가, 확인 시 `jumpToOffset`
 
-**완료 기준**: 앱만 갖고도(다른 안드로이드 기기나 Supabase 테이블을 수동으로 미리 채워둔 값 기준으로)
-"더 먼 위치로 이동" 팝업과 점프가 실제로 동작한다. VSCode 확장이 아직 없어도 이 스테이지는 독립적으로
-검증 가능(Supabase 테이블 값을 수동으로 갱신해보는 방식으로).
+**완료 기준 → 충족, 실기기로 End-to-End 검증함(재설계한 트리거 기준으로 재검증)**: 페이지를 넘겨도
+60초 안에는 원격에 안 올라가고, 뒤로가기로 리더를 벗어나면 즉시 반영됨을 확인. 홈 버튼으로 앱을
+백그라운드로 보낸 동안(다른 기기가 더 읽은 것처럼) 원격 위치를 바꿔두고 앱을 다시 열었더니 — 책을
+다시 여는 과정 없이 그냥 포그라운드로 돌아오는 것만으로 "다른 기기에서 더 읽으셨어요 — 22.7% 지점"
+팝업이 떴고, "이동" 탭 시 정확히 그 위치로 이동함을 확인. 다음은 스테이지 3(VSCode 확장 구현).
 
 ### 스테이지 3 — VSCode 확장 구현
 
@@ -250,8 +302,9 @@
 
 1. 확장 프로젝트 실제 스캐폴딩 (`yo code` 등 — 지금 있는 건 최소 placeholder일 뿐, TS 빌드/테스트
    설정은 아직 없음)
-2. 설정(`moonkataSync.supabaseUrl`) + `SecretStorage` 기반 publishable key/공유 시크릿 입력 커맨드
-3. 커서 위치 추적 → 오프셋 계산 → 디바운스 저장(쓰기)
+2. `SupabaseConfig` 상수(URL/publishable key) + `SecretStorage` 기반 공유 시크릿 입력 커맨드 +
+   "연결 테스트" 커맨드(더미 upsert 검증, 성공 시 상태 표시줄에 초록 체크)
+3. 커서 위치 추적 → 오프셋 계산 → 체크포인트(1분 무변화) + 포커스 이탈/파일 닫기 시 즉시 쓰기(§5 참고)
 4. 파일 열기/포커스 시 조회 → 비교 → 알림 → 확인 시 커서 이동(점프)
 
 **완료 기준**: PC와 안드로이드 양쪽에서 같은 파일을 오가며 읽어도, 항상 더 멀리 읽은 쪽 위치로
@@ -269,10 +322,11 @@
    현재는 계획 단계 플레이스홀더.
 2. ~~상대 경로 정규화 규칙 확정~~ **결정: §3 "정규화 규칙 (확정)" 참고** — 구분자 `/` 통일 → NFC →
    소문자화 순으로 양쪽 클라이언트가 동일하게 적용.
-3. ~~RLS 시크릿을 앱에 어떻게 안전하게 심을지~~ **결정: §1 "시크릿 관리" 참고** — 빌드에 굽지 않고
-   앱/확장 설정 화면에서 직접 입력받는 방식(안드로이드: 설정 UI 텍스트 필드 3개, VSCode: 설정 +
-   `SecretStorage`). 컴파일된 APK/vsix엔 값이 전혀 안 남아 이전 방식(CI 시크릿 주입)의 한계가 해소됨.
-   대신 개발자 본인 외의 설치자에게는 이 기능이 계속 꺼져 있음(§1 트레이드오프 참고).
+3. ~~RLS 시크릿을 앱에 어떻게 안전하게 심을지~~ **결정: §1 "시크릿 관리" 참고** — URL/publishable key는
+   소스에 고정값으로 커밋(Supabase 자체가 그렇게 쓰라고 설계한 값), 진짜 지켜야 하는 공유 시크릿만
+   설정 화면 필드 1개 + 연결 테스트 버튼으로 입력받는다(안드로이드에서 실기기 검증 완료, VSCode는
+   `SecretStorage` + 별도 테스트 커맨드로 대칭 구현 예정). 컴파일된 APK/vsix엔 공유 시크릿만큼은
+   전혀 안 남음. 대신 개발자 본인 외의 설치자에게는 이 기능이 계속 꺼져 있음(§1 트레이드오프 참고).
 4. ~~인코딩 불일치 처리 수준~~ **결정: §5 "인코딩 점검 & 변환" 참고** — VSCode가 UTF-8이 아닌 파일을
    열면 감지해서 UTF-8 변환을 물어보고, 동의하면 파일 자체를 UTF-8로 덮어써 근본적으로 해소. 거절 시엔
    `encoding` 필드 비교로 팝업만 비활성화하는 폴백.

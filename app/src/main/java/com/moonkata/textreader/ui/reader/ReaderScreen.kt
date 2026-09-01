@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,13 +74,22 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         }
     }
 
-    // 앱이 백그라운드로 가면(ON_STOP) 디바운스를 기다리지 않고 읽던 위치를 즉시 저장 — 그 직후 프로세스가
-    // 종료돼도 유실되지 않게 한다.
+    // 화면이 꺼지거나 홈으로 나가거나 다른 앱으로 전환되면(ON_STOP) 디바운스를 기다리지 않고 읽던
+    // 위치를 로컬에 즉시 저장(그 직후 프로세스가 종료돼도 유실되지 않게) + 원격에도 체크포인트 반영.
+    // 반대로 화면이 다시 보이게 되면(ON_START — 잠금 해제, 다른 앱에서 복귀 등) 그사이 다른 기기가
+    // 더 멀리 읽었는지 다시 확인한다. 뒤로가기로 리더를 완전히 벗어나는 경우는 이 옵저버가 아니라
+    // ReaderViewModel.onCleared에서 처리한다(ON_STOP은 액티비티가 살아있는 채로 멈출 때만 오고,
+    // Navigation-Compose로 같은 액티비티 안에서 뒤로가기하면 안 옴).
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                viewModel.flushPendingPosition()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    viewModel.flushPendingPosition()
+                    viewModel.syncNowToRemote()
+                }
+                Lifecycle.Event.ON_START -> viewModel.onReaderResumed()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -303,6 +314,16 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
             currentOffset = uiState.currentOffset,
             onJump = { offset -> viewModel.jumpToOffset(offset); showSearch = false },
             onDismiss = { showSearch = false },
+        )
+    }
+    uiState.externalFurtherOffset?.let { externalOffset ->
+        val externalPercent = if (uiState.fullText.isNotEmpty()) externalOffset.toFloat() / uiState.fullText.length * 100 else 0f
+        AlertDialog(
+            onDismissRequest = viewModel::dismissExternalPositionPrompt,
+            title = { Text("다른 기기에서 더 읽으셨어요") },
+            text = { Text("%.1f%% 지점까지 읽으셨네요 — 그 위치로 이동할까요?".format(externalPercent)) },
+            confirmButton = { TextButton(onClick = viewModel::jumpToExternalPosition) { Text("이동") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissExternalPositionPrompt) { Text("괜찮아요") } },
         )
     }
 }

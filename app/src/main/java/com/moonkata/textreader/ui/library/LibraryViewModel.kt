@@ -9,9 +9,11 @@ import androidx.lifecycle.viewModelScope
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
+import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.file.FolderBrowser
 import com.moonkata.textreader.data.file.SafFolderBrowser
 import com.moonkata.textreader.data.repository.BookRepository
+import com.moonkata.textreader.data.sync.normalizeRelativePath
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
 import com.moonkata.textreader.util.takePersistableReadPermission
@@ -164,7 +166,14 @@ class LibraryViewModel(
 
     private fun openTextFile(entry: FolderEntry.TextFile) {
         viewModelScope.launch {
-            val id = bookRepository.findOrCreateBook(entry.source, entry.name, entry.sizeBytes)
+            // zip 안 파일은 VSCode에서 직접 열리는 경로가 아니라 동기화 매칭 대상이 아님(§3) — 빈 값으로 둔다.
+            val relativePath = if (entry.source is BookSource.PlainTxt) {
+                val folderNames = _browseState.value.path.drop(1).map { it.name }
+                normalizeRelativePath(folderNames + entry.name)
+            } else {
+                ""
+            }
+            val id = bookRepository.findOrCreateBook(entry.source, entry.name, entry.sizeBytes, relativePath)
             _openBookEvents.tryEmit(id)
         }
     }

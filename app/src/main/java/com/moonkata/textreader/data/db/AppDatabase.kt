@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [BookEntity::class], version = 2, exportSchema = false)
+@Database(entities = [BookEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun bookDao(): BookDao
@@ -23,13 +23,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** VSCode 읽기 위치 동기화(.docs/VSCODE_SYNC_PLAN.md)용 — 동기화 루트 기준 상대 경로 저장 컬럼 추가.
+         * 기존 행은 빈 문자열로 채워지고, 서재에서 그 책을 다시 탭할 때 자연스럽게 채워진다(강제 백필 안 함). */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN relativePath TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "text_reader_database",
-                ).addMigrations(MIGRATION_1_2).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
                 INSTANCE = instance
                 instance
             }

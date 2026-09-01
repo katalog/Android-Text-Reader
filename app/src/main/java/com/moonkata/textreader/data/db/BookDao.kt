@@ -27,6 +27,9 @@ interface BookDao {
     @Query("UPDATE books SET totalCharCount = :totalCharCount, detectedEncoding = :encoding WHERE id = :id")
     suspend fun updateMeta(id: Long, totalCharCount: Int, encoding: String)
 
+    @Query("UPDATE books SET relativePath = :relativePath WHERE id = :id")
+    suspend fun updateRelativePath(id: Long, relativePath: String)
+
     @Delete
     suspend fun delete(book: BookEntity)
 }
