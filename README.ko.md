@@ -139,6 +139,8 @@ cd android-text-reader
 - Android Studio에서 열어 실기기 또는 에뮬레이터에 바로 실행 가능
 - 폰트 다운로드 기능에만 인터넷 연결이 필요하며, 그 외 모든 기능은 완전 오프라인으로 동작
 
+`vX.Y.Z` 형식의 태그를 push하면 [`.github/workflows/release.yml`](.github/workflows/release.yml)이 자동으로 빌드해서 [Releases](../../releases) 페이지에 APK를 올립니다. Play 스토어에 배포하는 게 아니라서 릴리스 빌드도 디버그 키스토어로 서명합니다 — 별도 서명 설정 없이 `assembleRelease`만으로 바로 설치 가능한 APK가 나옵니다.
+
 ## 앞으로 추가하고 싶은 것
 
 향후 추가 아이디어는 [`IDEAS.md`](.docs/IDEAS.md)에 정리해두었습니다.

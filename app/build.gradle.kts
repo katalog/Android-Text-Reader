@@ -25,6 +25,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 이 프로젝트는 Play 스토어에 올리지 않고 GitHub Release에서 APK를 직접 배포하는 용도라,
+            // 별도 릴리스 키스토어 없이 디버그 서명 그대로 쓴다 — CI에서도 추가 시크릿 설정 없이
+            // ./gradlew assembleRelease만으로 설치 가능한 APK가 나온다.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

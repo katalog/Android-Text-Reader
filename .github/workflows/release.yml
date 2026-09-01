@@ -1,0 +1,49 @@
+name: Release
+
+# v로 시작하는 태그(v1.0, v1.2.3 등)를 push하면 실행된다: 유닛 테스트를 돌리고, 통과하면 릴리스
+# APK를 빌드해서 그 태그 이름으로 된 GitHub Release를 만들고 APK를 첨부한다.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 계측 테스트(app/src/androidTest)는 에뮬레이터가 필요하고 그중 일부(RealFontDownloadIntegrationTest,
+      # FontApplyRepaginatesViewerTest)는 실제 인터넷으로 외부 폰트 배포처에 접속하는 테스트라, 릴리스를
+      # 막는 게이트로 CI에서 돌리기엔 너무 느리고 불안정하다. 순수 로직 유닛 테스트(app/src/test)만으로
+      # 릴리스를 게이트한다.
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Rename APK with version
+        run: |
+          mkdir -p release-artifacts
+          cp app/build/outputs/apk/release/app-release.apk \
+             "release-artifacts/android-text-reader-${GITHUB_REF_NAME}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.apk
+          generate_release_notes: true

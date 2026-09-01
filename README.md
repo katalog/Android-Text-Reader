@@ -114,6 +114,8 @@ cd android-text-reader
 - Open in Android Studio and run directly on a device or emulator
 - Internet access is only needed for the font-download feature — everything else works fully offline
 
+Prebuilt APKs are published automatically on the [Releases](../../releases) page whenever a `vX.Y.Z` tag is pushed — see [`.github/workflows/release.yml`](.github/workflows/release.yml). Release builds are signed with the debug keystore (this project isn't distributed through the Play Store), so `assembleRelease` produces an installable APK with no extra signing setup.
+
 ## Roadmap
 
 Future ideas are tracked in [`IDEAS.md`](.docs/IDEAS.md).
