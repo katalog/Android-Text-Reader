@@ -35,6 +35,12 @@ class BookRepository(
         return BookContentReader.read(context, source)
     }
 
+    /** [book]의 실제 파일을 지금 열 수 있는지 확인 — 삭제/이동되었거나 SAF 권한이 회수됐으면 false. */
+    suspend fun bookFileExists(book: BookEntity): Boolean {
+        val source = BookSource.fromStoredString(book.documentUri)
+        return BookContentReader.exists(context, source)
+    }
+
     suspend fun markOpened(bookId: Long, totalCharCount: Int, encoding: String) {
         bookDao.updateMeta(bookId, totalCharCount, encoding)
     }

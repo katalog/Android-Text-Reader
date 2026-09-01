@@ -95,7 +95,11 @@ class LibraryViewModel(
         }
         viewModelScope.launch {
             val mostRecent = bookRepository.observeLibrary().first().firstOrNull()
-            if (mostRecent?.lastOpenedAt != null) _resumeCandidate.value = mostRecent
+            // 파일이 삭제/이동됐거나 SAF 권한이 회수된 책은 후보에서 제외한다 — 그대로 후보로 올리면
+            // "계속 보기"를 눌렀을 때 파일을 열 수 없어 앱이 죽는다.
+            if (mostRecent?.lastOpenedAt != null && bookRepository.bookFileExists(mostRecent)) {
+                _resumeCandidate.value = mostRecent
+            }
         }
     }
 
