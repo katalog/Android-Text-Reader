@@ -56,4 +56,12 @@ data class ReaderSettings(
     /** 마지막으로 연결 테스트에 성공한 시크릿 값 — [supabaseSharedSecret]과 같을 때만 "연결됨" 표시.
      * 시크릿을 바꾸면 자동으로 이 값과 달라지므로 별도 무효화 로직 없이 자연스럽게 재검증을 요구한다. */
     val supabaseVerifiedSecret: String = "",
+    // PC 트레이 서버 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md) — Supabase와 동일한 패턴: 호스트 +
+    // 공유 시크릿만 있으면 되고, 실제 계정 자격증명은 없음(우리가 프로토콜을 직접 통제하므로).
+    val pcSyncHost: String = "",
+    val pcSyncSecret: String = "",
+    /** 마지막으로 연결 테스트에 성공했을 때의 (host, secret) — 지금 설정값과 정확히 같을 때만
+     * "연결됨" 표시. */
+    val pcSyncVerifiedHost: String = "",
+    val pcSyncVerifiedSecret: String = "",
 )

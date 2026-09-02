@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
@@ -13,6 +14,11 @@ import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.file.FolderBrowser
 import com.moonkata.textreader.data.file.SafFolderBrowser
 import com.moonkata.textreader.data.repository.BookRepository
+import com.moonkata.textreader.data.sync.PcHostScanner
+import com.moonkata.textreader.data.sync.PcSyncClient
+import com.moonkata.textreader.data.sync.PcSyncFileManager
+import com.moonkata.textreader.data.sync.PcSyncProgress
+import com.moonkata.textreader.data.sync.PcSyncResult
 import com.moonkata.textreader.data.sync.normalizeRelativePath
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
@@ -43,6 +49,14 @@ private data class BrowseState(
     val sortOption: FolderSortOption = FolderSortOption.NAME_ASC,
 )
 
+/** PC 서버 "지금 동기화" 진행 상태 — `LibraryViewModel.pcSyncState`. */
+data class PcSyncUiState(
+    val isSyncing: Boolean = false,
+    val progress: PcSyncProgress? = null,
+    val result: PcSyncResult? = null,
+    val errorMessage: String? = null,
+)
+
 data class LibraryUiState(
     val rootUri: Uri? = null,
     val path: List<BrowseLocation> = emptyList(),
@@ -50,6 +64,7 @@ data class LibraryUiState(
     val isLoading: Boolean = false,
     val sortOption: FolderSortOption = FolderSortOption.NAME_ASC,
     val progressByStoredUri: Map<String, Float> = emptyMap(),
+    val settings: ReaderSettings = ReaderSettings(),
 )
 
 /**
@@ -78,16 +93,25 @@ class LibraryViewModel(
         _resumeCandidate.value = null
     }
 
-    val uiState: StateFlow<LibraryUiState> = combine(_browseState, bookRepository.observeLibrary()) { browse, books ->
-        LibraryUiState(
-            rootUri = browse.rootUri,
-            path = browse.path,
-            entries = sortEntries(browse.entries, browse.sortOption),
-            isLoading = browse.isLoading,
-            sortOption = browse.sortOption,
-            progressByStoredUri = books.associate { it.documentUri to it.lastReadProgressPercent },
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryUiState())
+    private val _pcSyncState = MutableStateFlow(PcSyncUiState())
+    val pcSyncState: StateFlow<PcSyncUiState> = _pcSyncState
+
+    fun dismissPcSyncResult() {
+        _pcSyncState.update { it.copy(result = null, errorMessage = null) }
+    }
+
+    val uiState: StateFlow<LibraryUiState> =
+        combine(_browseState, bookRepository.observeLibrary(), settingsRepository.settingsFlow) { browse, books, settings ->
+            LibraryUiState(
+                rootUri = browse.rootUri,
+                path = browse.path,
+                entries = sortEntries(browse.entries, browse.sortOption),
+                isLoading = browse.isLoading,
+                sortOption = browse.sortOption,
+                progressByStoredUri = books.associate { it.documentUri to it.lastReadProgressPercent },
+                settings = settings,
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryUiState())
 
     init {
         viewModelScope.launch {
@@ -175,6 +199,64 @@ class LibraryViewModel(
             }
             val id = bookRepository.findOrCreateBook(entry.source, entry.name, entry.sizeBytes, relativePath)
             _openBookEvents.tryEmit(id)
+        }
+    }
+
+    // --- PC 트레이 서버 파일 동기화 (.docs/PC_SYNC_SERVER_PLAN.md §3) ---
+
+    /** 연결 테스트 없이 입력값만 임시 저장 — 시트가 닫힐 때 커밋하는 용도(Supabase 공유 시크릿과 동일 패턴). */
+    fun updatePcSyncConnectionDraft(host: String, secret: String) {
+        viewModelScope.launch { settingsRepository.updatePcSyncConnection(host, secret, verified = false) }
+    }
+
+    /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. */
+    suspend fun testPcSyncConnection(host: String, secret: String): Boolean {
+        if (host.isBlank() || secret.isBlank()) return false
+        val success = PcSyncClient(host, secret).testConnection()
+        if (success) settingsRepository.updatePcSyncConnection(host, secret, verified = true)
+        return success
+    }
+
+    /** "PC 찾기" 버튼 — 로컬 서브넷에서 PC 트레이 서버를 찾아 IP 목록을 돌려준다. */
+    suspend fun scanForPcSyncHosts(): List<String> = PcHostScanner(getApplication()).scanLocalSubnet()
+
+    /**
+     * "지금 동기화" 버튼 — 연결 테스트를 통과한 설정으로만 동작한다(Supabase 시크릿과 동일하게 "테스트
+     * 성공 시점의 값과 지금 설정값이 정확히 같을 때"만 검증된 것으로 침). 진행 상태는 [pcSyncState]로
+     * 노출되고, 끝나면 [PcSyncUiState.result] 또는 [PcSyncUiState.errorMessage]가 채워진다.
+     */
+    fun syncFromPc() {
+        val rootUri = _browseState.value.rootUri
+        if (rootUri == null) {
+            _pcSyncState.update { it.copy(errorMessage = "먼저 라이브러리 폴더를 선택하세요") }
+            return
+        }
+        viewModelScope.launch {
+            val settings = settingsRepository.settingsFlow.first()
+            val verified = settings.pcSyncHost.isNotBlank() &&
+                settings.pcSyncHost == settings.pcSyncVerifiedHost &&
+                settings.pcSyncSecret == settings.pcSyncVerifiedSecret
+            if (!verified) {
+                _pcSyncState.update { it.copy(errorMessage = "먼저 연결 테스트를 통과해야 합니다") }
+                return@launch
+            }
+            _pcSyncState.update { PcSyncUiState(isSyncing = true) }
+            val client = PcSyncClient(settings.pcSyncHost, settings.pcSyncSecret)
+            val manager = PcSyncFileManager(getApplication(), client)
+            val result = manager.sync(rootUri) { progress ->
+                _pcSyncState.update { it.copy(progress = progress) }
+            }
+            _pcSyncState.update {
+                if (result != null) {
+                    it.copy(isSyncing = false, progress = null, result = result)
+                } else {
+                    it.copy(isSyncing = false, progress = null, errorMessage = "PC에 연결할 수 없습니다")
+                }
+            }
+            // 동기화가 지금 보고 있는 폴더 안의 파일을 바꿨을 수 있는데, 폴더뷰 목록은 처음 들어왔을 때
+            // 한 번만 읽어온 상태라 그대로 두면 새로 받은 파일이 화면엔 안 보인다(실기기 검증 중 확인) —
+            // 성공하면 지금 위치를 다시 읽어온다.
+            if (result != null) loadCurrent()
         }
     }
 

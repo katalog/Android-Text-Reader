@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PC 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md)가 사용자가 입력한 LAN 호스트(IP/컴퓨터 이름)로
+     평범한 http(TLS 없음)를 쓴다 — 로컬 트레이 서버가 자체 서명 인증서를 관리하게 만드는 건 이
+     기능 범위를 벗어남(§1 "보안 범위" 참고, 신뢰할 수 있는 홈 네트워크 전제). 호스트가 매번 사용자
+     입력값이라 도메인 단위 허용 목록으로는 못 좁히고 전체 허용함 — Supabase 등 다른 네트워크
+     호출은 전부 이미 https라 실질적 영향 없음. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

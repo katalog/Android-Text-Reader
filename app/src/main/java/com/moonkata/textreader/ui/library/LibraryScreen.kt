@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -67,6 +68,7 @@ fun LibraryScreen(
     val resumeCandidate by viewModel.resumeCandidate.collectAsState()
     val pickFolder = rememberFolderPickerLauncher(onFolderSelected = viewModel::onRootFolderSelected)
     var showSortMenu by remember { mutableStateOf(false) }
+    var showPcSync by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.openBookEvents.collect { bookId -> onOpenBook(bookId) }
@@ -99,6 +101,9 @@ fun LibraryScreen(
                     },
                     actions = {
                         if (uiState.rootUri != null) {
+                            IconButton(onClick = { showPcSync = true }) {
+                                Icon(Icons.Default.Sync, contentDescription = "PC 파일 동기화 설정")
+                            }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
                                     Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "정렬")
@@ -155,6 +160,10 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    if (showPcSync) {
+        PcSyncSheet(viewModel = viewModel, settings = uiState.settings, onDismiss = { showPcSync = false })
     }
 }
 

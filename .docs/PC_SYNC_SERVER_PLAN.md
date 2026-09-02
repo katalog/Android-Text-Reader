@@ -1,6 +1,7 @@
 # 계획: PC 트레이 서버 기반 PC → 안드로이드 단방향 파일 동기화
 
-**상태**: 계획 확정, 구현 시작 전. [SMB_FILE_SYNC_PLAN.md](SMB_FILE_SYNC_PLAN.md)를 대체.
+**상태**: P1(서버 코어)/A1~A2/A4(안드로이드 핵심 로직 + 실기기 종단 검증) 완료.
+P2(트레이 UI)/P3(빌드·배포)만 남음. [SMB_FILE_SYNC_PLAN.md](SMB_FILE_SYNC_PLAN.md)를 대체.
 
 ## 배경
 
@@ -133,3 +134,24 @@ Go를 선택한 이유: 런타임 설치가 전혀 불필요한 단일 네이티
 1. **고정 포트 번호**: `58221`로 확정. IANA 동적/사설 포트 범위(49152~65535)라 공식 등록된 서비스와
    충돌할 수가 없음(그 범위는 애초에 IANA가 아무것도 할당하지 않는 구간) — 확인 완료.
 2. **기존 `smb-file-sync` 브랜치**: 로컬+원격 모두 삭제.
+
+## 실기기 종단 검증 중 발견/수정한 것 (P1 헤드리스 서버 + A1/A2/A4)
+
+실제 PC(Go 서버를 커맨드라인으로 실행, `-folder`로 실제 라이브러리 폴더 지정)와 실기기로 175개 파일
+(수 MB~십수 MB 다수 포함)을 끝까지 동기화해서 확인 — "PC 찾기" → "연결 테스트" → "지금 동기화" 전
+과정이 실제로 동작하고 로컬 SAF 트리에 파일이 정확히 반영됨(받음 170 · 갱신 0 · 삭제 5, 삭제는 테스트
+폴더에 미리 있던 무관한 파일들이 대상이라 의도한 동작). 과정에서 나온 진짜 버그 세 개:
+
+- **Cleartext(http://) 차단**: `targetSdk 36`이라 평범한 http 요청이 기본적으로 막혀서 "PC 찾기"가
+  항상 빈 목록만 돌려줬다. `AndroidManifest.xml`에 `usesCleartextTraffic="true"`만 추가했다가도 여전히
+  막혔는데, 원인은 `app/src/debug/res/xml/network_security_config.xml`(MockWebServer 테스트용으로
+  예전부터 있던, `localhost`/`127.0.0.1`만 허용하는 설정)이 `usesCleartextTraffic`보다 우선해서 계속
+  막고 있었던 것 — `networkSecurityConfig`가 있으면 `usesCleartextTraffic`은 통째로 무시된다. `main`에도
+  `res/xml/network_security_config.xml`(`<base-config cleartextTrafficPermitted="true">`)을 추가하고
+  debug용 설정도 같은 값으로 넓혀서 해결.
+- **Syncthing 마커 파일 노출**: 실제 라이브러리 폴더로 테스트하다가 `.stfolder/syncthing-folder-*.txt`가
+  그대로 동기화 대상에 잡히는 걸 발견 — Go 서버의 `listFilesRecursively`에 점(`.`)으로 시작하는
+  폴더/파일을 건너뛰는 필터를 추가(폴더면 하위 전체를 `filepath.SkipDir`로 스킵).
+- **동기화 후 폴더뷰가 안 새로고침됨**: "지금 동기화"가 성공해도 지금 보고 있는 폴더 목록은 처음 진입할
+  때 한 번만 읽어온 상태 그대로라 새로 받은 파일이 화면엔 안 보였다(재실행하면 보임) — `syncFromPc()`
+  끝에 `loadCurrent()` 재호출을 추가해 성공 시 지금 위치를 다시 읽어오게 함.

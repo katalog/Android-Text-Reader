@@ -50,6 +50,10 @@ class ReaderSettingsRepository(private val context: Context) {
         val PAGE_TRANSITION_ANIMATION = stringPreferencesKey("page_transition_animation")
         val SUPABASE_SHARED_SECRET = stringPreferencesKey("supabase_shared_secret")
         val SUPABASE_VERIFIED_SECRET = stringPreferencesKey("supabase_verified_secret")
+        val PC_SYNC_HOST = stringPreferencesKey("pc_sync_host")
+        val PC_SYNC_SECRET = stringPreferencesKey("pc_sync_secret")
+        val PC_SYNC_VERIFIED_HOST = stringPreferencesKey("pc_sync_verified_host")
+        val PC_SYNC_VERIFIED_SECRET = stringPreferencesKey("pc_sync_verified_secret")
     }
 
     val settingsFlow: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
@@ -88,6 +92,10 @@ class ReaderSettingsRepository(private val context: Context) {
                 ?.let { runCatching { PageTransitionAnimation.valueOf(it) }.getOrNull() } ?: defaults.pageTransitionAnimation,
             supabaseSharedSecret = prefs[Keys.SUPABASE_SHARED_SECRET] ?: defaults.supabaseSharedSecret,
             supabaseVerifiedSecret = prefs[Keys.SUPABASE_VERIFIED_SECRET] ?: defaults.supabaseVerifiedSecret,
+            pcSyncHost = prefs[Keys.PC_SYNC_HOST] ?: defaults.pcSyncHost,
+            pcSyncSecret = prefs[Keys.PC_SYNC_SECRET] ?: defaults.pcSyncSecret,
+            pcSyncVerifiedHost = prefs[Keys.PC_SYNC_VERIFIED_HOST] ?: defaults.pcSyncVerifiedHost,
+            pcSyncVerifiedSecret = prefs[Keys.PC_SYNC_VERIFIED_SECRET] ?: defaults.pcSyncVerifiedSecret,
         )
     }
 
@@ -129,6 +137,16 @@ class ReaderSettingsRepository(private val context: Context) {
     suspend fun updateSupabaseSharedSecret(value: String, verifiedSecret: String? = null) = edit {
         it[Keys.SUPABASE_SHARED_SECRET] = value
         if (verifiedSecret != null) it[Keys.SUPABASE_VERIFIED_SECRET] = verifiedSecret
+    }
+
+    /** [verified]가 true면(연결 테스트 성공) 지금 값을 검증 완료 상태로도 같이 저장한다. */
+    suspend fun updatePcSyncConnection(host: String, secret: String, verified: Boolean = false) = edit {
+        it[Keys.PC_SYNC_HOST] = host
+        it[Keys.PC_SYNC_SECRET] = secret
+        if (verified) {
+            it[Keys.PC_SYNC_VERIFIED_HOST] = host
+            it[Keys.PC_SYNC_VERIFIED_SECRET] = secret
+        }
     }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
