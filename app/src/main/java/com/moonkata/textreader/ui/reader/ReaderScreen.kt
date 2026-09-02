@@ -317,11 +317,18 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         )
     }
     uiState.externalFurtherOffset?.let { externalOffset ->
-        val externalPercent = if (uiState.fullText.isNotEmpty()) externalOffset.toFloat() / uiState.fullText.length * 100 else 0f
+        val totalLength = uiState.fullText.length
+        val externalPercent = if (totalLength > 0) externalOffset.toFloat() / totalLength * 100 else 0f
+        val currentPercent = if (totalLength > 0) uiState.currentOffset.toFloat() / totalLength * 100 else 0f
         AlertDialog(
             onDismissRequest = viewModel::dismissExternalPositionPrompt,
             title = { Text("다른 기기에서 더 읽으셨어요") },
-            text = { Text("%.1f%% 지점까지 읽으셨네요 — 그 위치로 이동할까요?".format(externalPercent)) },
+            text = {
+                Text(
+                    "현재 %.1f%% 읽는 중 — 다른 기기는 %.1f%%까지 읽으셨네요. 그 위치로 이동할까요?"
+                        .format(currentPercent, externalPercent)
+                )
+            },
             confirmButton = { TextButton(onClick = viewModel::jumpToExternalPosition) { Text("이동") } },
             dismissButton = { TextButton(onClick = viewModel::dismissExternalPositionPrompt) { Text("괜찮아요") } },
         )
