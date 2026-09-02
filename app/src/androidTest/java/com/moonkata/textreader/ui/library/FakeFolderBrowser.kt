@@ -9,10 +9,13 @@ import com.moonkata.textreader.model.FolderEntry
  * `FolderEntry.TextFile`이 가리키는 실제 파일(`BookSource`)은 진짜 읽을 수 있는 경로(예: 테스트가
  * 직접 써둔 파일의 file:// URI)여야 리더까지 이어지는 시나리오를 검증할 수 있다.
  */
-class FakeFolderBrowser(private val entriesByLocation: Map<Uri, List<FolderEntry>>) : FolderBrowser {
+class FakeFolderBrowser(
+    private val entriesByLocation: Map<Uri, List<FolderEntry>>,
+    private val zipEntriesByUri: Map<Uri, List<FolderEntry.TextFile>> = emptyMap(),
+) : FolderBrowser {
     override fun rootDisplayName(treeUri: Uri): String = "테스트 폴더"
 
     override suspend fun listFolder(folderUri: Uri): List<FolderEntry> = entriesByLocation[folderUri].orEmpty()
 
-    override suspend fun listZipEntries(zipUri: Uri): List<FolderEntry.TextFile> = emptyList()
+    override suspend fun listZipEntries(zipUri: Uri): List<FolderEntry.TextFile> = zipEntriesByUri[zipUri].orEmpty()
 }

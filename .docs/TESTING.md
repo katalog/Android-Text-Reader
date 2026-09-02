@@ -250,6 +250,51 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
     (Row가 시맨틱 경계를 안 만들어 라벨과 스위치가 서로 다른 형제 스위치들과 전부 평탄화된 채 섞임)
     `Row` 전체를 `Modifier.toggleable(role = Role.Switch)`로 감싸 라벨+스위치를 하나로 병합하도록
     고쳤다 — 터치 영역이 스위치 썸(thumb)만큼 작던 것도 라벨 전체로 넓어져 접근성도 같이 개선됨.
+- [x] **Phase 12 — USER_SCENARIOS.md 16개 시나리오 전체를 다시 훑어서 남아있던 공백 메우기**
+  (2026-09-03):
+  - (androidTest) `SafFolderBrowserTest` — `data/file/SafFolderBrowser.kt`의 `listZipEntries`(zip
+    안 `.txt` 나열)는 테스트가 하나도 없었다. `listFolder`는 진짜 SAF 트리 URI가 있어야 해서
+    자동화가 어렵지만(그래서 계속 `FakeFolderBrowser`로 대체), `listZipEntries`는
+    `contentResolver.openInputStream`만 쓰므로 `file://` URI로도 실제 로직을 그대로 검증할 수
+    있다: `.txt`만 나열, 디렉터리 접두사가 파일명에서 잘리는지(원본 엔트리 이름은 `entryName`에
+    그대로 남는지), 디렉터리 엔트리 자체는 건너뛰는지, 빈 zip/손상된 zip/없는 파일이 예외 없이 빈
+    목록을 돌려주는지, 크기가 정확한지. 크기 검증 과정에서 실제 자바 zip API의 함정을 하나 배웠다 —
+    `ZipOutputStream`에 `ZipEntry`를 그냥 스트리밍으로 쓰면(기본 DEFLATED, 크기를 미리 안 정해줌)
+    data descriptor 방식이 돼서, `ZipInputStream`으로 앞에서부터 읽을 때(`listZipEntries`가 하는
+    방식) 아직 그 엔트리 바이트를 다 읽기 전엔 `ZipEntry.size`가 -1(모름)일 수 있다 — 테스트용 zip은
+    `STORED` + 크기/CRC 사전 계산으로 만들어 이 문제를 피했다(실제 zip 도구들은 스트리밍이 아니라
+    파일 크기를 미리 알고 쓰기 때문에 이 문제가 거의 없음).
+  - (androidTest) `LibraryZipAndBreadcrumbNavigationTest` — USER_SCENARIOS.md §1의 7·8번(zip 진입,
+    브레드크럼 복귀)은 지금까지 자동화가 없었다. 폴더 목록은 `FakeFolderBrowser`로 흉내내지만, zip
+    안 파일을 실제로 여는 부분은 진짜 zip 파일로 검증한다(`BookContentReader`가 폴더 탐색기를 거치지
+    않고 URI로 직접 읽으므로 진짜 zip이면 실제 데이터 흐름 그대로 확인 가능). `FakeFolderBrowser`에
+    zip 목록도 흉내낼 수 있는 생성자 파라미터를 추가(기존 호출부는 기본값으로 그대로 동작).
+  - (androidTest) `ChapterPatternSheetTest` — `ChapterPatternSheet`(§8)는 순수 로직
+    (`ChapterPatternCatalog`/`ChapterDetector`)만 검증돼 있었지 시트 자체는 테스트가 없었다. 내장
+    프리셋을 끄면 실제로 챕터 재인식까지 일어나는지(유일한 프리셋을 끄면 챕터가 진짜로 0개가 되는지
+    까지 확인해 "설정만 바뀌고 재인식은 안 일어남" 같은 배선 누락을 잡을 수 있게 함), 유효한 커스텀
+    정규식 추가 시 입력창이 실제로 비워지는지, 잘못된 정규식은 에러 문구만 뜨고 저장 안 되는지, 커스텀
+    패턴 삭제가 실제로 반영되는지.
+  - (androidTest) `ReaderViewModelWiringTest` — 두 가지 배선이 지금까지 검증된 적 없었다: (1)
+    세로 스크롤 모드(§5)에서 `next()`/`previous()`가 `Paginator` 계산이 아니라 `navEvents`로
+    `RequestNextPage`/`RequestPreviousPage`(챕터점프 모드가 같이 켜져 있으면 `JumpToOffset`)를
+    방출하는지 — 실제 스크롤 자체는 Compose 쪽(`ReaderScrollContent`) 담당이라 이 레벨에서는 "올바른
+    이벤트가 나가는지"까지만 검증 가능. (2) `flushPendingPosition()`(§14, 화면 이탈 시 즉시 저장
+    경로)이 500ms 디바운스를 기다리지 않고 즉시 Room에 반영되는지. `navEvents`(replay 없는
+    SharedFlow) 구독을 검증하다가 흔히 겪는 함정 하나를 다시 확인함 — 같은 단일 스레드
+    `runBlocking` 이벤트 루프 위에서 `launch`로 띄운 구독 코루틴과 `Thread.sleep` 기반 폴링
+    (`waitUntilTrue`)을 같이 쓰면, 그 sleep이 구독 코루틴이 실행될 차례 자체를 막아버려 이벤트를
+    영원히 못 받는다 — `CoroutineStart.UNDISPATCHED`로 시작한 `async { flow.first() }`로 바꿔
+    `next()`/`previous()` 호출 전에 구독이 확실히 걸려 있음을 보장하는 방식으로 해결.
+  - (androidTest) `ReaderTapZoneAndSwipeNavigationTest` — `ReaderChromeAutoHideTest`는 "화면 가운데
+    탭은 상하단바만 닫고 페이지는 안 넘어간다"만 확인했지, 실제 탭 존(좌/우 절반)이나 스와이프가
+    `TouchTurnMode`/`SwipeTurnMode` 설정에 따라 진짜로 다음/이전 중 어느 쪽으로 넘기는지는 검증된 적이
+    없었다(§4). 오른쪽 탭/왼쪽 스와이프는 항상 다음, 왼쪽 탭/오른쪽 스와이프는 `STANDARD`면 이전,
+    `BOTH_NEXT`면 마찬가지로 다음으로 가는 네 조합을 실제 `performTouchInput`(탭 좌표, `swipeLeft`/
+    `swipeRight`)으로 검증.
+
+  이 라운드에서 검토했지만 의도적으로 손대지 않은 것 두 가지(VSCode 동기화 오케스트레이션, TTS
+  청크/콜백 배선)는 아래 "의도적으로 제외" 목록에 사유와 함께 정리해뒀다.
 
 ## 의도적으로 제외
 
@@ -277,3 +322,13 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
   검증(포트 바인딩, `/ping`·`/list`·`/file` 실제 왕복, Windows 시작 프로그램 레지스트리 키 실행까지
   확인)으로 대체 — Windows 트레이 UI는 Claude가 스크린샷으로 확인할 수 없어 자동화 테스트의 신뢰도
   자체가 낮다.
+- **VSCode 원격 동기화의 `ReaderViewModel` 레벨 오케스트레이션**(`checkRemoteAndMaybeNotify`가
+  "더 멀리 읽었습니다" 팝업을 실제로 띄우는지, `scheduleRemoteSyncCheckpoint`의 1분 유휴 타이머) —
+  `ReaderViewModel`이 `SupabaseConfig.URL`(고정값)로 `ReadingPositionSyncClient`를 직접 만들어서
+  `MockWebServer`로 가로챌 주입 지점이 없다. 이 앱의 핵심 상태 머신 파일에 이 테스트 하나만을 위한
+  주입 지점을 새로 뚫는 건 위험 대비 효익이 낮다고 판단해 보류 — 밑단 프로토콜(
+  `ReadingPositionSyncClient`)은 `ReadingPositionSyncClientTest`로 이미 검증됨.
+- **TTS의 500자 청크 분할·utterance 완료 후 `jumpToOffset` 배선**(`ReaderViewModel` 내부) — 위와
+  같은 이유로 `TtsController`가 `ReaderViewModel` 안에서 직접 만들어져 주입 지점이 없고, 그 위에 실제
+  TTS 엔진 타이밍이라는 근본적인 불안정성까지 겹친다. `TtsController` 자체의 안전성(준비 전/후 호출,
+  shutdown 이후 호출)은 `TtsControllerTest`로 검증돼 있음.
