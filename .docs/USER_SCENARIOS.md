@@ -23,6 +23,15 @@
    `lastUsedSafTreeUri` 저장(다음 실행 때 이 폴더를 바로 엶)
 5. `data/file/SafFolderBrowser.kt`의 `listFolder(treeUri)` 호출 → 한 단계 목록(`.txt`/`.zip`만, 재귀
    스캔 아님)을 반환 → `LibraryScreen`이 `LazyColumn`으로 렌더
+6. **정렬 변경**: 정렬 메뉴에서 옵션(이름/날짜/크기 × 오름차순/내림차순, `FolderSortOption`) 선택 →
+   `LibraryViewModel.setSortOption(option)`이 즉시 목록을 재정렬하고
+   `ReaderSettingsRepository.updateLibrarySortOption`으로 다음 실행에도 남게 저장
+7. **폴더/zip 진입**: 폴더 또는 `FolderEntry.ZipArchive` 항목 탭 → `navigateInto(entry)`가
+   `BrowseLocation`(`Folder` 또는 `Zip`) 하나를 경로 스택에 push → `loadCurrent()`가 그 타입에 따라
+   `SafFolderBrowser.listFolder`(폴더) 또는 `listZipEntries`(zip 내부 `.txt` 나열)를 호출
+8. **브레드크럼으로 상위 폴더 복귀**: 브레드크럼 항목 탭 → `navigateToBreadcrumb(index)`가 경로 스택을
+   그 지점까지 잘라내고 `loadCurrent()` 재호출 — 뒤로 몇 단계든 스택만 자르면 되므로 개별 폴더를
+   기억해뒀다 되짚어갈 필요가 없음
 
 ## 2. 앱 재실행 → 이어서 읽기 다이얼로그 (FEATURES.md §2)
 
@@ -136,6 +145,20 @@
 2. 폰트 크기·여백처럼 페이지 경계에 영향을 주는 값이면 `onViewportMeasured`의 측정 키가 바뀌어 4번
    시나리오의 2번과 같은 경로로 현재 페이지가 재계산됨. 테마 색상처럼 페이지 경계와 무관한 값은
    `ui/theme/ReaderThemePresets.kt`가 바로 반영돼 재계산 없이 다시 그려짐
+3. **읽기 모드 전환**(페이지 ↔ 스크롤): `setPageTurnMode(value)` → `ReaderSettings.pageTurnMode` 저장
+   → `ReaderScreen`이 다음 컴포지션에서 `ReaderPagerContent` 대신 `ReaderScrollContent`를(또는
+   반대로) 그림 — `currentOffset`은 그대로 유지되므로 같은 글자 위치에서 모드만 바뀜(4번/5번
+   시나리오 참고)
+4. **줄바꿈 정리 모드 변경**(원문 유지 ↔ 문단 재구성): `setLineBreakMode(value)` 호출은 설정만
+   저장하고 끝 — 실제 재적용은 `ReaderViewModel.init`이 구독 중인 `settingsFlow.collect`에서
+   이전 값과 다르다는 걸 감지해 `reflowParagraphs(mode)`(`TextReflower.reflow`를
+   `Dispatchers.Default`에서 재실행)를 호출하는 별도 경로로 일어남 — 즉 설정 변경과 재계산이
+   한 함수 호출로 안 묶여 있고 상태 흐름 관찰로 분리돼 있음
+5. **화면 꺼짐 방지 / 화면 방향 고정 토글**: `setKeepScreenOnEnabled(value)` / `setOrientationLock(value)`도
+   설정만 저장하고, 실제 적용은 `ReaderScreen`의 `DisposableEffect(settings.keepScreenOnEnabled)` /
+   `DisposableEffect(settings.orientationLock)`가 값 변화를 감지해 각각
+   `Window.addFlags(FLAG_KEEP_SCREEN_ON)`/`clearFlags`, `Activity.requestedOrientation`을 직접
+   조작 — 화면을 벗어나면(`onDispose`) 둘 다 원래 상태로 되돌림
 
 ## 12. 자동 페이지 넘김(타이머) 켜기 (FEATURES.md §14)
 
@@ -170,7 +193,11 @@
 2. `ReaderViewModel.testSupabaseConnection(secret)` → `data/sync/ReadingPositionSyncClient.kt`의
    `testConnection()`이 더미 경로로 upsert를 시도 → 2xx면 성공. 성공 시
    `ReaderSettingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)`로
-   시크릿과 검증 상태를 함께 커밋
+   시크릿과 검증 상태를 함께 커밋. **실패하면**(시크릿이 틀려 RLS가 401/403으로 거부, 네트워크 없음
+   등) `testConnection()`이 `false`를 돌려주고 `runCatching { ... }.getOrDefault(false)`라 예외로
+   튀지 않음 — 아무것도 저장되지 않아 `supabaseSharedSecret != supabaseVerifiedSecret` 상태 그대로
+   남고, 이후 3~7번 원격 조회/반영 경로는 `syncClientOrNull`이 매번 null을 돌려주며 전부 조용히
+   스킵됨(기능이 켜진 적이 없는 것과 동일하게 동작 — 로컬 읽기 흐름엔 영향 없음)
 
 **책을 열 때 / 화면 재진입 시 원격 조회**
 
@@ -203,18 +230,24 @@
 2. `ui/library/PcSyncSheet.kt`에서 "PC 찾기" 탭 → `LibraryViewModel.scanForPcSyncHosts()` →
    `data/sync/PcHostScanner.kt`의 `scanLocalSubnet()`이 로컬 `/24` 대역 254개 후보를 64개씩 병렬로
    `PcSyncClient.isPcSyncServer(candidate)`(신뢰 검증 없는 lenient TLS로 `/ping` 호출) 시도 → 응답
-   본문에 `"moonkata-sync-server"`가 있으면 후보로 채택
+   본문에 `"moonkata-sync-server"`가 있으면 후보로 채택. **아무것도 못 찾으면**(다른 서브넷, PC 서버
+   미실행, 방화벽 등) `scanLocalSubnet()`이 그냥 빈 리스트를 돌려줄 뿐 예외를 던지지 않음 — 호스트는
+   수동 입력으로 계속 진행 가능
 3. 호스트 + 시크릿 입력 후 "연결 테스트" → `LibraryViewModel.testPcSyncConnection` →
    `PcSyncClient(host, secret).testConnection()`이 lenient TLS로 `/list`를 호출(시크릿 헤더 포함) →
    성공하면 그 순간 받은 인증서 지문(`data/sync/PcTlsTrust.kt`의 `sha256Fingerprint`,
    `client.lastSeenFingerprint`)까지
    `ReaderSettingsRepository.updatePcSyncConnection(..., verified = true, fingerprint = ...)`로
-   함께 저장 — TOFU(trust-on-first-use) 방식
+   함께 저장 — TOFU(trust-on-first-use) 방식. **실패하면**(호스트/시크릿 공백, PC 응답 없음, 시크릿
+   불일치로 401) `testPcSyncConnection`이 `false`만 돌려주고 아무것도 저장하지 않음 — "지금 동기화"는
+   아래 4번에서 검증 안 된 상태로 막힘
 
 **지금 동기화**
 
-4. "지금 동기화" 탭 → `LibraryViewModel.syncFromPc()` — 호스트/시크릿이 마지막 연결 테스트 성공 값과
-   정확히 같은지 재확인 후 진행
+4. "지금 동기화" 탭 → `LibraryViewModel.syncFromPc()` — 먼저 라이브러리 폴더가 선택돼 있는지
+   확인(없으면 `pcSyncState.errorMessage`에 "먼저 라이브러리 폴더를 선택하세요"로 즉시 중단), 그 다음
+   호스트/시크릿이 마지막 연결 테스트 성공 값과 정확히 같은지 재확인(하나라도 다르면 "먼저 연결
+   테스트를 통과해야 합니다"로 중단 — 예를 들어 연결 테스트 이후 시크릿 입력칸만 다시 고친 경우)
 5. `PcSyncClient(host, secret, pinnedFingerprint)`(이번엔 지문 고정 TLS)를 생성 →
    `data/sync/PcSyncFileManager.kt`의 `sync(treeUri)` 호출
 6. `client.listFilesRecursively()`로 원격 파일 목록(`/list`), `data/sync/LocalLibraryScanner.kt`의
@@ -230,3 +263,12 @@
 10. 진행 상황은 `PcSyncProgress`로 `LibraryViewModel.pcSyncState`에 실시간 반영 → `PcSyncSheet`가
     진행률로 표시 → 완료 시 `PcSyncResult`(받음/갱신/삭제/실패 건수)로 교체되고 `loadCurrent()`가
     서재 목록을 새로고침
+
+**실패 두 종류**
+
+- **원격 목록 조회 자체가 실패**(6번 단계, PC가 꺼졌거나 네트워크가 끊김): `listFilesRecursively()`가
+  `null`을 돌려주고 `PcSyncFileManager.sync()`도 그대로 `null`을 리턴 → `syncFromPc()`가
+  `pcSyncState.errorMessage`에 "PC에 연결할 수 없습니다"를 세팅하고 종료 — 이번엔 아무 파일도
+  건드리지 않음(부분 반영 없음)
+- **개별 파일 단위 실패**(7~9번 단계 도중 특정 파일만 다운로드/삭제 실패): 그 파일만
+  `PcSyncResult.failed`에 집계되고 나머지 파일은 계속 처리됨 — 동기화 전체가 중단되지 않음
