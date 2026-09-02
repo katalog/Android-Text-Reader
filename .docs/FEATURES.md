@@ -19,6 +19,8 @@ library  →  reader/{bookId}
 
 설정은 DataStore(`ReaderSettings` / `ReaderSettingsRepository`), 책·읽기 위치는 Room(`BookEntity` / `BookDao` / `AppDatabase`)에 저장합니다.
 
+앱 자체는 완전 오프라인으로 동작하지만, 기기 간 동기화 기능 두 가지(둘 다 기본 꺼짐, 사용자가 시크릿을 직접 입력해야 켜짐)가 `data/sync/`에 있습니다 — VSCode와 읽기 위치를 공유하는 기능(§15)과 PC와 책 파일 자체를 동기화하는 기능(§16). 자세한 배경은 각각 [`VSCODE_SYNC_PLAN.md`](VSCODE_SYNC_PLAN.md), [`PC_SYNC_SERVER_PLAN.md`](PC_SYNC_SERVER_PLAN.md) 참고.
+
 ---
 
 ## 1. 서재 — SAF 폴더 탐색기
@@ -289,6 +291,74 @@ TIMER면 설정한 초마다 `next()`를 호출합니다. TTS면 현재 오프�
 
 ---
 
+## 15. VSCode 읽기 위치 동기화
+
+**무엇을 하나**  
+같은 책을 PC(VSCode 확장)와 안드로이드 양쪽에서 읽을 때, "더 멀리 읽은 위치"를 공유 Supabase 프로젝트를 매개로 맞춰줍니다. 로그인·계정 개념 없이 사용자가 직접 만든 공유 시크릿 문자열 하나로 인증합니다. 실패해도(네트워크 없음, 시크릿 미검증 등) 로컬 읽기·저장 흐름에는 전혀 영향이 없는 best-effort 기능입니다.
+
+**파일**
+
+| 역할 | 파일 |
+|---|---|
+| Supabase 프로젝트 URL·publishable key(고정값) | `data/sync/SupabaseConfig.kt` |
+| PostgREST 직접 호출(fetch/upsert/testConnection) | `data/sync/ReadingPositionSyncClient.kt` |
+| 매칭 키(상대경로) 정규화 + SAF documentId 역산 폴백 | `data/sync/RelativePath.kt` |
+| 조회·체크포인트·팝업 트리거 | `ui/reader/ReaderViewModel.kt` (`checkRemoteAndMaybeNotify`, `scheduleRemoteSyncCheckpoint`, `syncNowToRemote`, `onReaderResumed`) |
+| "더 멀리 읽었습니다" 팝업 UI | `ui/reader/ReaderScreen.kt` (`externalFurtherOffset` 다이얼로그) |
+| 시크릿 입력·연결 테스트 UI | `ui/reader/QuickSettingsSheet.kt` |
+| 시크릿/검증 상태 저장 | `data/datastore/ReaderSettings.kt`, `ReaderSettingsRepository.kt` |
+
+**구현 요약**
+
+1. 책마다 `BookEntity.relativePath`(라이브러리 루트 기준 상대경로, NFC+소문자 정규화)가 VSCode 쪽과 맞춰야 하는 매칭 키입니다. 폴더 브라우징 중엔 자연히 채워지지만, "이어서 읽기"처럼 그 경로를 안 거치는 진입점에서는 SAF `documentId` 문자열에서 트리 루트 접두사를 잘라내 역산하는 폴백(`relativePathFromSafDocumentUri`)으로 채웁니다.
+2. 시크릿을 입력만 하고 "연결 테스트"를 통과하지 않으면 동기화 기능 자체가 비활성 상태입니다(`supabaseSharedSecret != supabaseVerifiedSecret`이면 클라이언트를 만들지 않음) — 검증 안 된 시크릿으로 계속 실패할 요청을 조용히 반복하지 않기 위해서입니다. 연결 테스트는 단순 조회가 아니라 더미 경로로 upsert를 시도합니다 — RLS가 막은 SELECT는 에러 없이 그냥 빈 배열을 돌려줘서 "행이 없어서 비었나 시크릿이 틀려서 비었나"를 구분할 수 없기 때문입니다.
+3. 원격 조회는 책을 열 때, 그리고 리더 화면이 다시 보이게 될 때(`ON_START`, 화면 잠금 해제·다른 앱에서 복귀 등)마다 합니다 — 읽는 도중 계속 폴링하지는 않습니다. 원격 오프셋이 로컬보다 500자 넘게 앞서 있을 때만 팝업을 띄웁니다(수십 자 차이의 사소한 오프셋 오차로 매번 뜨는 걸 막는 데드존).
+4. 원격에 쓰는 건 페이지/문단이 바뀔 때마다가 아니라, 같은 위치에서 1분 이상 머무를 때(체크포인트)와 리더 화면을 벗어나는 시점(뒤로가기/화면 꺼짐/다른 앱 전환)뿐입니다 — 같은 오프셋을 반복해서 올리지 않도록 마지막으로 실제 반영한 오프셋을 기억해둡니다. 화면을 벗어나는 시점의 업서트는 `viewModelScope`가 이미 취소된 뒤에도 마저 끝나야 해서 일부러 `GlobalScope`로 분리합니다.
+
+---
+
+## 16. PC 파일 동기화
+
+**무엇을 하나**  
+PC에서 실행하는 별도 트레이 앱([`external_library/sync_server`](../external_library/sync_server), Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더를 라이브러리 폴더의 거울(단방향 PC→폰)로 동기화합니다. Wi-Fi에서 서로 붙어 있으면 되고, 클라우드 저장소나 로그인 없이 PC를 직접 서버로 씁니다. 자체 서명 인증서 + SSH 방식(TOFU: 최초 연결 테스트 때 지문을 저장해두고 이후로는 그 지문과 정확히 같은지만 확인) 지문 고정으로 암호화합니다. 자세한 설계 배경은 [`PC_SYNC_SERVER_PLAN.md`](PC_SYNC_SERVER_PLAN.md) 참고.
+
+**파일 — 안드로이드 쪽**
+
+| 역할 | 파일 |
+|---|---|
+| PC 서버 HTTP(S) 클라이언트 | `data/sync/PcSyncClient.kt` (`/ping`·`/list`·`/file`, 고정 포트 58221) |
+| TLS 신뢰 로직(lenient/pinned `SSLContext`, 지문 계산) | `data/sync/PcTlsTrust.kt` |
+| 로컬 서브넷에서 PC 서버 찾기 | `data/sync/PcHostScanner.kt` (`/ping`으로 후보마다 확인) |
+| 라이브러리 SAF 트리 재귀 스캔(동기화용) | `data/sync/LocalLibraryScanner.kt` |
+| 델타 계산(순수 함수) + 실제 SAF 반영 | `data/sync/PcSyncFileManager.kt` (`computeSyncDelta`, `sync`) |
+| 동기화 설정 draft·연결 테스트·"지금 동기화" 트리거 | `ui/library/LibraryViewModel.kt` (`testPcSyncConnection`, `scanForPcSyncHosts`, `syncFromPc`, `pcSyncState`) |
+| 설정 UI | `ui/library/PcSyncSheet.kt` |
+| 호스트/시크릿/검증 상태/지문 저장 | `data/datastore/ReaderSettings.kt`, `ReaderSettingsRepository.kt` |
+
+**파일 — PC 쪽 (Go, `external_library/sync_server`)**
+
+| 역할 | 파일 |
+|---|---|
+| 진입점, HTTPS 서버 기동 | `main.go` |
+| HTTP 라우팅(`/ping`, `/list`, `/file`) + 시크릿 검사 | `server.go` |
+| 폴더 재귀 스캔 + 경로 탈출 방지 | `filelist.go` |
+| 설정 파일(`%APPDATA%\MoonkataSyncServer\config.json`) | `config.go` |
+| 트레이 메뉴 변경이 재시작 없이 반영되게 하는 공유 상태 | `state.go` |
+| 자체 서명 인증서 생성·재사용 | `tls.go` |
+| 시스템 트레이 UI(폴더 변경/시크릿 복사·재생성/자동실행) | `tray.go` |
+| 네이티브 다이얼로그(MessageBox/폴더선택/클립보드) | `dialog_windows.go` |
+| Windows 시작 프로그램 등록(`HKCU ... Run`) | `autostart_windows.go` |
+
+**구현 요약**
+
+1. PC 서버는 처음 실행될 때 시크릿을 자동 생성해 트레이 알림으로 보여주고 클립보드에 복사합니다(사용자가 직접 안전한 문자열을 만들 필요가 없게). 안드로이드에서 그 시크릿과 PC 주소(직접 입력 또는 "PC 찾기"로 로컬 서브넷 스캔)를 입력하고 "연결 테스트"를 통과해야 "지금 동기화"가 활성화됩니다.
+2. TLS는 CA 인증이 아니라 지문 고정입니다: "PC 찾기"·"연결 테스트"는 `createLenientSslContext`(아무 인증서나 받아들임)로 접속하되, 연결 테스트가 성공하면 그 순간 실제로 받은 인증서의 SHA-256 지문(`sha256Fingerprint`)을 저장합니다. 이후 "지금 동기화"는 `createPinnedSslContext`로 그 지문과 정확히 일치하는 인증서만 받아들입니다 — 저장된 지문과 다르면(다른 PC로 바뀌었거나 중간자 공격) 시크릿이 맞아도 거부됩니다.
+3. 델타는 상대경로 키(`normalizeRelativePath`로 대소문자/구분자/유니코드 정규화, VSCode 동기화와 같은 규칙 재사용)로 원격·로컬 파일 목록을 맞춰봐서 계산합니다(`computeSyncDelta`, 순수 함수라 `PcSyncDeltaTest`로 테스트됨) — 원격에만 있으면 받고, **크기가 다르면**(수정시각은 안 봄) 다시 받고, 로컬에만 있으면 지웁니다. 수정시각을 비교에 안 넣는 이유: 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 되어 PC 원본 수정시각을 못 물려받으므로, 비교에 넣으면 안 바뀐 파일도 재동기화마다 매번 다시 받게 됩니다.
+4. 기존 로컬 파일을 갱신할 땐 `documentUri`를 유지한 채 내용만 덮어씁니다 — 지우고 새로 만들면 `BookEntity`가 그 URI로 참조하던 읽기 위치 기록이 고아가 되기 때문입니다.
+5. PC 서버의 폴더/시크릿은 `AppState`(뮤텍스로 보호된 공유 상태)를 통해 매 요청마다 읽으므로, 트레이 메뉴에서 폴더를 바꾸거나 시크릿을 재생성해도 HTTP 리스너를 재시작할 필요가 없습니다.
+
+---
+
 ## 데이터 계층 한눈에
 
 ```
@@ -307,6 +377,10 @@ DataStore (reader_settings)
   └── ChapterDetector → Chapters (패턴은 DataStore)
   └── Paginator → 현재 PageBreak 하나
   └── ChapterJumpNavigator → 점프 오프셋 목록
+
+기기 간 동기화 (둘 다 기본 꺼짐, best-effort)
+  └── ReadingPositionSyncClient → Supabase(reading_positions 테이블) ← 읽기 위치만, VSCode와 공유
+  └── PcSyncClient/PcSyncFileManager → PC 트레이 서버(HTTPS+TOFU) ← 책 파일 자체, 라이브러리 SAF 트리로 반영
 ```
 
 도메인 모델: `model/Paragraph.kt`, `Chapter.kt`, `PageBreak.kt`, `SearchResult.kt`, `FolderEntry.kt`.
@@ -317,4 +391,4 @@ DataStore (reader_settings)
 
 로직은 `app/src/test`, Compose/Room/실제 측정은 `app/src/androidTest`입니다. 자세한 목록은 저장소의 `TESTING.md`를 참고하세요.
 
-대표적으로 라이브러리 정렬·폴더 탐색, 이어읽기 다이얼로그, 페이지 왕복, 먼 오프셋 점프, 목차 자동 스크롤, 검색 시트, 퀵설정, 폰트 적용 후 재페이지, 챕터 인식 회귀, 폰트 다운로드(MockWebServer + 실네트워크)가 있습니다.
+대표적으로 라이브러리 정렬·폴더 탐색, 이어읽기 다이얼로그, 페이지 왕복, 먼 오프셋 점프, 목차 자동 스크롤, 검색 시트, 퀵설정, 폰트 적용 후 재페이지, 챕터 인식 회귀, 폰트 다운로드(MockWebServer + 실네트워크)가 있습니다. 기기 간 동기화(§15, §16)는 상대경로 정규화·델타 계산 같은 순수 로직과, `MockWebServer`(HTTPS 포함)로 검증하는 PC/Supabase 요청 프로토콜 계약까지가 자동화 테스트 범위이고, 실제 SAF 파일 쓰기·서브넷 스캔·PC 쪽 트레이 UI/Windows 자동 실행은 실기기 수동 검증으로 남겨뒀습니다(`TESTING.md`의 "의도적으로 제외" 참고). PC 서버(Go)의 경로 탈출 방지 로직은 `external_library/sync_server`에서 `go test ./...`로 별도 검증합니다.

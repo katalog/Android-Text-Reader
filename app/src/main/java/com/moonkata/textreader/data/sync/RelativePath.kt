@@ -27,8 +27,12 @@ fun relativePathFromSafDocumentUri(documentUri: Uri, treeUri: Uri): String? {
     return try {
         val documentId = DocumentsContract.getDocumentId(documentUri)
         val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
-        if (!documentId.startsWith(treeDocumentId)) return null
-        val relative = documentId.removePrefix(treeDocumentId).trimStart('/')
+        // "$treeDocumentId/" 접두사(구분자까지 포함)로 비교한다 — 단순 startsWith(treeDocumentId)면
+        // 트리가 "primary:Books"일 때 형제 트리 "primary:BooksExtra"의 문서도 접두사가 겹쳐 잘못
+        // 매칭된다.
+        val prefix = "$treeDocumentId/"
+        if (!documentId.startsWith(prefix)) return null
+        val relative = documentId.removePrefix(prefix)
         if (relative.isEmpty()) return null
         normalizeRelativePath(relative.split("/"))
     } catch (e: Exception) {

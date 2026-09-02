@@ -16,12 +16,40 @@ data class PcSyncResult(
     val failed: Int,
 )
 
+/** [computeSyncDelta]의 결과 — 받아야(새로 만들거나 덮어써야) 할 원격 파일과, 지워야 할 로컬 파일. */
+data class PcSyncDelta(val toWrite: List<PcRemoteFile>, val toDelete: List<LocalLibraryFile>)
+
 /**
- * PC 트레이 서버 동기화의 델타 계산 + 실제 로컬(SAF) 반영 — .docs/PC_SYNC_SERVER_PLAN.md §3.
- * 단방향(PC → 폰)이라 로컬은 항상 원격의 거울: 원격에만 있으면 받고, 크기/수정시각이 다르면 다시
- * 받고, 로컬에만 있으면 지운다. 델타 비교 키는 [RelativePath.kt]의 정규화 함수를 그대로 재사용해서
- * VSCode 동기화 때 이미 검증된 대소문자/유니코드/구분자 규칙과 일치시킨다 — 다만 실제 파일 생성/조회에는
- * 원본 대소문자 그대로의 경로를 쓴다(정규화된 키는 비교 전용, 실제 파일명을 바꾸면 안 되므로).
+ * 원격/로컬 파일 목록만으로 동기화 델타를 계산하는 순수 함수 — I/O(다운로드/삭제)는 하지 않는다.
+ * 단방향(PC → 폰)이라 로컬은 항상 원격의 거울: 원격에만 있으면 받고(toWrite), 크기가 다르면 다시
+ * 받고(toWrite), 로컬에만 있으면 지운다(toDelete). 비교 키는 [normalizeRelativePath]로 정규화해서
+ * VSCode 동기화 때 이미 검증된 대소문자/유니코드/구분자 규칙과 일치시킨다 — 다만 [PcSyncDelta]에 담기는
+ * 값 자체는 원본 대소문자 그대로의 경로다(정규화된 키는 비교 전용, 실제 파일명을 바꾸면 안 되므로).
+ *
+ * 크기만 비교하고 수정시각은 보지 않는다 — 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 되지 PC
+ * 원본의 수정시각을 그대로 못 물려받는다(SAF가 문서 수정시각을 임의로 설정하게 허용 안 하는 제공자가
+ * 많음). 수정시각까지 비교 조건에 넣으면 재동기화 때마다 로컬 시각과 원격 시각이(내용은 그대로인데도)
+ * 항상 달라서 안 바뀐 파일까지 매번 전부 다시 받는 문제가 실사용 중 확인됐다. 소설 텍스트 파일은 내용이
+ * 바뀌면 거의 항상 글자 수(=크기)도 같이 바뀌니 크기만으로도 실용적으로 충분하다.
+ */
+fun computeSyncDelta(remoteFiles: List<PcRemoteFile>, localFiles: List<LocalLibraryFile>): PcSyncDelta {
+    val remoteByKey = remoteFiles.associateBy { syncDeltaKeyOf(it.relativePath) }
+    val localByKey = localFiles.associateBy { syncDeltaKeyOf(it.relativePath) }
+
+    val toWrite = remoteByKey.entries.filter { (key, remote) ->
+        val local = localByKey[key]
+        local == null || local.sizeBytes != remote.sizeBytes
+    }.map { it.value }
+    val toDelete = localByKey.filterKeys { it !in remoteByKey }.values.toList()
+
+    return PcSyncDelta(toWrite, toDelete)
+}
+
+private fun syncDeltaKeyOf(relativePath: String): String = normalizeRelativePath(relativePath.split("/"))
+
+/**
+ * PC 트레이 서버 동기화 — 델타 계산([computeSyncDelta])과 실제 로컬(SAF) 반영을 잇는다 —
+ * .docs/PC_SYNC_SERVER_PLAN.md §3.
  */
 class PcSyncFileManager(
     private val context: Context,
@@ -32,20 +60,9 @@ class PcSyncFileManager(
     suspend fun sync(treeUri: Uri, onProgress: (PcSyncProgress) -> Unit = {}): PcSyncResult? = withContext(Dispatchers.IO) {
         val remoteFiles = client.listFilesRecursively() ?: return@withContext null
         val localFiles = localScanner.scanRecursively(treeUri)
+        val localByKey = localFiles.associateBy { syncDeltaKeyOf(it.relativePath) }
 
-        val remoteByKey = remoteFiles.associateBy { keyOf(it.relativePath) }
-        val localByKey = localFiles.associateBy { keyOf(it.relativePath) }
-
-        // 크기만 비교한다 — 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 되지 PC 원본의 수정시각을
-        // 그대로 못 물려받는다(SAF가 문서 수정시각을 임의로 설정하게 허용 안 하는 제공자가 많음).
-        // 수정시각까지 비교 조건에 넣으면 재동기화 때마다 로컬 시각과 원격 시각이 (내용은 그대로인데도)
-        // 항상 달라서 안 바뀐 파일까지 매번 전부 다시 받는 문제가 실사용 중 확인됐다. 소설 텍스트 파일은
-        // 내용이 바뀌면 거의 항상 글자 수(=크기)도 같이 바뀌니 크기만으로도 실용적으로 충분하다.
-        val toWrite = remoteByKey.entries.filter { (key, remote) ->
-            val local = localByKey[key]
-            local == null || local.sizeBytes != remote.sizeBytes
-        }.map { it.value }
-        val toDelete = localByKey.filterKeys { it !in remoteByKey }.values.toList()
+        val (toWrite, toDelete) = computeSyncDelta(remoteFiles, localFiles)
 
         val total = toWrite.size + toDelete.size
         var completed = 0
@@ -56,7 +73,7 @@ class PcSyncFileManager(
 
         for (remote in toWrite) {
             onProgress(PcSyncProgress(completed, total, remote.relativePath))
-            val existingLocal = localByKey[keyOf(remote.relativePath)]
+            val existingLocal = localByKey[syncDeltaKeyOf(remote.relativePath)]
             val success = if (existingLocal != null) {
                 writeIntoExisting(existingLocal.documentUri, remote)
             } else {
@@ -105,6 +122,4 @@ class PcSyncFileManager(
         }
         return current
     }
-
-    private fun keyOf(relativePath: String): String = normalizeRelativePath(relativePath.split("/"))
 }

@@ -5,7 +5,7 @@
 **[English](README.md) | [한국어](README.ko.md)**
 
 로컬 기기에 있는 `.txt` 소설을 읽기 위한 안드로이드 텍스트 리더 앱입니다.
-서버/로그인/동기화가 전혀 없는 **완전 오프라인 단일 사용자 앱**으로, 처음부터 직접 설계하고 구현했습니다.
+계정 로그인이나 벤더 종속 없이 **오프라인 우선(offline-first) 단일 사용자 앱**으로, 처음부터 직접 설계하고 구현했습니다. 핵심 읽기 경험은 네트워크를 전혀 타지 않습니다. 다만 원할 때 PC와 연결할 수 있는 선택적(기본 꺼짐) 기능 두 가지가 있습니다 — VSCode와 읽기 위치를 공유하는 기능과, 작은 PC 동반 서버에서 책 파일을 받아오는 기능이며 아래에서 자세히 다룹니다.
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.09-4285F4?logo=jetpackcompose&logoColor=white)
@@ -47,6 +47,10 @@ DB 스키마, 페이지네이션 알고리즘, 오프라인 파일 처리(SAF, �
 - 줄바꿈 정리 옵션(원문 유지 / 문단 재구성)
 - 화면 꺼짐 방지, 화면 방향 고정
 - 타이머 기반 자동 페이지 넘김 / TTS 음성 낭독 (상호 배타적으로 동작)
+
+### 기기 간 동기화 (선택 기능, 기본 꺼짐)
+- **VSCode와 읽기 위치 동기화** — PC에서도 같은 `.txt` 파일을 동반 VSCode 확장으로 읽는다면, 더 멀리 읽은 쪽 위치로 다른 쪽에 따라올지 물어봅니다. 계정 없이, 양쪽에 같은 공유 시크릿 문자열 하나만 붙여넣으면 됩니다 — 실제 방어선은 로그인이 아니라 Supabase 프로젝트의 접근 정책(RLS)이고, 이 프로젝트는 오프셋 하나만 중계합니다. best-effort로 설계돼 있어 실패하면(오프라인, 미검증 시크릿 등) 조용히 건너뛸 뿐 로컬 읽기/저장 흐름을 절대 막지 않습니다.
+- **PC에서 파일 동기화** — PC에서 실행하는 작은 오픈소스 Windows 트레이 앱([`external_library/sync_server`](external_library/sync_server), 순수 Go, exe 하나 외엔 설치할 게 없음)이 폴더 하나를 같은 Wi-Fi 안에서 HTTPS로 공유하면, 안드로이드 앱이 라이브러리 폴더로 단방향(PC→폰) 미러링합니다. "지금 동기화" 버튼 하나로 동작하고, 클라우드 저장소나 계정 없이 PC 자체가 서버 역할을 합니다 — 인증은 한 번 복사해 붙여넣는 시크릿으로 합니다. 사설 IP는 정식 인증서를 받을 수 없어서, TLS는 CA 검증 대신 SSH 방식(최초 접속 때 지문을 저장해두고 이후엔 그 지문과 정확히 같은지만 확인)으로 고정합니다.
 
 ## 기술 스택
 
@@ -96,17 +100,22 @@ com.moonkata.textreader/
 │   ├── file/                     — SafFolderBrowser(SAF 탐색, 재귀 스캔 아님), EncodingDetector(UTF-8/EUC-KR/CP949 자동감지), BookSource(zip 내부도 탐색)
 │   ├── font/                     — FontCatalog(무료 한글 폰트 목록) + FontDownloadManager + FontResolver
 │   ├── parser/                   — TextReflower(줄바꿈 정리) → Paginator가 소비, ChapterDetector/ChapterPatternCatalog, ChapterJumpNavigator
+│   ├── sync/                     — 선택적 기기 간 동기화: VSCode 읽기 위치 클라이언트(Supabase),
+│   │                               PC 파일 동기화 클라이언트(HTTPS + TLS 지문 고정)
 │   └── repository/               — BookRepository
 ├── model/                        — Paragraph, Chapter, PageBreak, FolderEntry 등 도메인 모델
 ├── ui/
-│   ├── library/                  — 폴더 탐색기 화면, "이어서 읽기" 다이얼로그
+│   ├── library/                  — 폴더 탐색기 화면, "이어서 읽기" 다이얼로그, PC 동기화 시트
 │   ├── reader/                   — 리더 화면, 퀵설정/목차/검색/폰트/챕터패턴 바텀시트
 │   └── theme/                    — 테마 프리셋
 ├── tts/                          — TtsController, AutoPageTurnController
 └── util/                         — SAF/컬렉션 확장 함수
+
+external_library/
+└── sync_server/                  — 위 파일 동기화 기능의 PC쪽 동반 트레이 앱(Go, 프레임워크 없음)
 ```
 
-각 기능을 어떤 파일이 담당하고 구체적으로 어떻게 구현했는지는 [`docs/FEATURES.md`](.docs/FEATURES.md)에 파일 단위로 정리해 두었습니다.
+각 기능을 어떤 파일이 담당하고 구체적으로 어떻게 구현했는지는 [`docs/FEATURES.md`](.docs/FEATURES.md)에 파일 단위로 정리해 두었습니다. 사용자 시나리오별로 어떤 파일의 어떤 함수가 실행되는지는 [`docs/USER_SCENARIOS.md`](.docs/USER_SCENARIOS.md)에 순서대로 정리해 두었습니다.
 
 ## 테스트
 
@@ -121,6 +130,12 @@ Android 런타임(Context, Room, DataStore, Compose, `TextMeasurer`) 필요 여�
 - 폰트 다운로드는 `MockWebServer`(가짜 로컬 서버)로 성공/실패 로직을 검증하는 것과 별개로, 실제
   배포처(GitHub 등)에서 진짜로 다운로드되고 뷰어에 적용까지 되는지 확인하는 실 네트워크 테스트도 둡니다
   — 실제로 이 테스트 덕분에 폰트 배포처 URL 3개가 조용히 깨져있던 걸 잡아서 고쳤습니다.
+- 기기 간 동기화 두 기능은 순수 로직 테스트(상대경로 정규화, PC 동기화 델타 계산, TLS 지문 해시)와
+  두 클라이언트의 `MockWebServer` 기반 프로토콜 계약 테스트로 검증합니다 — HTTPS/지문 고정 클라이언트
+  쪽은 즉석에서 만든 자체 서명 인증서로 실제 TLS 핸드셰이크까지 검증합니다. 실제 SAF 파일 쓰기, LAN
+  서브넷 스캔, PC 트레이 앱 자체처럼 자동화하기 어려운 부분은 `TESTING.md`에 기록된 실기기 수동 검증으로
+  남겨뒀습니다. PC 서버(Go)의 경로 탈출 방지 로직은 `external_library/sync_server`에 별도 `go test`
+  스위트가 있습니다.
 - IME 표시 여부, 실제 타이머/TTS 타이밍처럼 Compose 시맨틱 트리로는 신뢰성 있게 검증할 수 없는 플랫폼
   동작은 의도적으로 범위에서 제외하고 수동 확인으로 남겨둡니다 — 통과해도 실제 회귀를 못 잡는 테스트를
   굳이 만들지 않았습니다.
@@ -140,6 +155,8 @@ cd android-text-reader
 - 폰트 다운로드 기능에만 인터넷 연결이 필요하며, 그 외 모든 기능은 완전 오프라인으로 동작
 
 `vX.Y.Z` 형식의 태그를 push하면 [`.github/workflows/release.yml`](.github/workflows/release.yml)이 자동으로 빌드해서 [Releases](../../releases) 페이지에 APK를 올립니다. Play 스토어에 배포하는 게 아니라서 릴리스 빌드도 디버그 키스토어로 서명합니다 — 별도 서명 설정 없이 `assembleRelease`만으로 바로 설치 가능한 APK가 나옵니다.
+
+선택 기능인 PC 파일 동기화 동반 앱(`external_library/sync_server`)은 안드로이드 앱과 런타임 의존이 전혀 없는 독립 Go 모듈입니다 — 그 폴더 안에서 `go build`하거나, 같은 Releases 페이지에서 미리 빌드된 Windows `.exe`(`sync-server-vX.Y.Z` 태그, [`.github/workflows/release-sync-server.yml`](.github/workflows/release-sync-server.yml)가 빌드)를 받으면 됩니다.
 
 ## 앞으로 추가하고 싶은 것
 

@@ -4,11 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-**문카타 리더 (Moonkata Reader)** — 로컬 `.txt` 소설을 읽기 위한 완전 오프라인 단일 사용자 안드로이드 앱.
-서버/로그인/동기화 없음. Kotlin + Jetpack Compose, 수동 MVVM(`AndroidViewModel` + Repository), DI 프레임워크 없음.
+**문카타 리더 (Moonkata Reader)** — 로컬 `.txt` 소설을 읽기 위한 오프라인 우선 단일 사용자 안드로이드 앱.
+핵심 읽기 경험은 서버/로그인/네트워크 없이 완전 오프라인 동작. 기본 꺼짐인 선택적 기기 간 동기화 기능이
+둘 있음 — VSCode와 읽기 위치 공유(Supabase 경유, `data/sync/ReadingPositionSyncClient.kt`), PC와 책
+파일 동기화(자체 Go 트레이 서버, HTTPS+TLS 지문 고정, `data/sync/PcSyncClient.kt` +
+`external_library/sync_server/`). Kotlin + Jetpack Compose, 수동 MVVM(`AndroidViewModel` +
+Repository), DI 프레임워크 없음.
 
 자세한 기능 목록과 설계 배경은 [README.md](README.md)(영문) / [README.ko.md](README.ko.md)(한글) 참고.
-기능별 파일 단위 구현 설명은 [.docs/FEATURES.md](.docs/FEATURES.md), 백로그는 [.docs/IDEAS.md](.docs/IDEAS.md).
+기능별 파일 단위 구현 설명은 [.docs/FEATURES.md](.docs/FEATURES.md), 사용자 시나리오별 코드 실행
+흐름은 [.docs/USER_SCENARIOS.md](.docs/USER_SCENARIOS.md), 백로그는 [.docs/IDEAS.md](.docs/IDEAS.md).
 
 ## 빌드 & 테스트 명령어
 

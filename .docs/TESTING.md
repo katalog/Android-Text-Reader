@@ -160,6 +160,47 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
     검증: 간격마다 정확히 한 번 tick, `stop()` 이후 더 이상 안 옴, `start()` 재호출 시 이전 타이머
     취소하고 새 간격 적용. 새 `testImplementation(libs.kotlinx.coroutines.test)`(1.8.1, 프로젝트가
     실제로 물고 있는 kotlinx-coroutines-core 버전과 맞춤) 추가.
+- [x] **Phase 10 — 기기 간 동기화** (`data/sync/*`, VSCode 위치 동기화 + PC 파일 동기화 — 추가 당시
+  테스트가 0건이었던 패키지):
+  - (일반 유닛) `RelativePathNormalizeTest` — `normalizeRelativePath`: 구분자 통일(`\` → `/`),
+    소문자화, NFC 정규화(완성형 vs 자모 분해형 한글이 같은 키로 합쳐지는지 `\u` 이스케이프로 명시한
+    두 문자열로 검증).
+  - (일반 유닛) `PcTlsTrustTest` — `sha256Fingerprint`: `openssl x509 -fingerprint -sha256`와 같은
+    형식(콜론 구분 대문자 헥사 32쌍)인지, 같은 바이트는 항상 같은 지문을 내는지, 다른 바이트는 다른
+    지문을 내는지. TLS 핸드셰이크 자체(lenient/pinned `SSLContext`)는 순수 로직이 아니라 androidTest
+    쪽 `PcSyncClientTest`에서 실제 소켓으로 검증한다.
+  - (일반 유닛) `PcSyncDeltaTest`의 로직은 `PcSyncFileManager.kt`에서 `computeSyncDelta`(순수 함수,
+    I/O 없음)로 뽑아냈지만, 테스트 자체는 `LocalLibraryFile.documentUri`가 `android.net.Uri` 타입이라
+    (`Uri.parse`가 app/src/test의 android.jar 스텁에서는 예외를 던짐) androidTest 쪽에 있다 — 아래
+    참고.
+  - (androidTest) `RelativePathSafTest` — `relativePathFromSafDocumentUri`: 최상위/중첩 파일 경로
+    역산, 트리 루트 자체를 가리키는 문서는 null, 무관한 트리의 문서는 null. **회귀 테스트**: 트리
+    `primary:Books`와 접두사가 겹치는 형제 트리 `primary:BooksExtra`의 문서가 잘못 매칭되던 버그(단순
+    `startsWith`, 구분자 없는 접두사 비교)를 테스트 작성 중 발견해 `"$treeDocumentId/"`로 구분자까지
+    포함해 비교하도록 [RelativePath.kt](../app/src/main/java/com/moonkata/textreader/data/sync/RelativePath.kt)를
+    같이 고쳤다.
+  - (androidTest) `PcSyncDeltaTest` — `computeSyncDelta`: 원격에만 있으면 다운로드, 로컬에만 있으면
+    삭제, 크기가 다르면 갱신. **회귀 테스트**: 크기가 같으면 로컬/원격 수정시각이 완전히 달라도
+    `toWrite`에 들어가면 안 된다 — 2026-09-02 실기기 검증에서 잡힌 "재동기화 때마다 안 바뀐 파일까지
+    매번 다시 받던" 버그의 재발 방지.
+  - (androidTest) `ReadingPositionSyncClientTest` — `ReadingPositionSyncClient`가 Supabase
+    PostgREST에 보내는 요청 계약을 로컬 `MockWebServer`(평문 HTTP)로 검증: `fetch`의 쿼리 파싱(빈
+    배열/서버 에러 → null, 정상 응답 파싱, `encoding: null` 처리), `apikey`/`x-moonkata-secret` 헤더,
+    `upsert`의 JSON 바디 모양과 `Prefer: resolution=merge-duplicates` 헤더, `testConnection`의
+    2xx/4xx 판정.
+  - (androidTest) `PcSyncClientTest` — `PcSyncClient`가 PC 트레이 서버와 주고받는 요청 계약을 로컬
+    `MockWebServer`(진짜 TLS 핸드셰이크가 되는 HTTPS, `okhttp-tls`의 `HeldCertificate`로 즉석에서
+    자체 서명 인증서 생성)로 검증 — TOFU 지문 고정의 실제 동작을 흉내만 내지 않고 실제 소켓으로
+    확인하는 유일한 테스트: lenient 모드로 연결하면 실제 인증서 지문이 `lastSeenFingerprint`에
+    기록되는지, 그 지문으로 pinned 모드 연결하면 성공하는지, **틀린 지문으로 pinned 모드 연결하면
+    실패하는지**(TOFU의 핵심 방어선), `/list` 응답 파싱, `/file` 다운로드 바이트가 정확히 스트리밍
+    되는지, 경로 URL 인코딩, `/ping` 응답으로 `isPcSyncServer` 판정. `PC_SYNC_PORT`(58221)가
+    `PcSyncClient`에 하드코딩돼 있어 MockWebServer도 임의 포트가 아니라 그 고정 포트로 직접 띄운다.
+  - (Go, `external_library/sync_server`) `filelist_test.go` — `go test ./...`로 별도 실행(안드로이드
+    Gradle 빌드에 안 묶임). `resolveFilePath`의 경로 탈출 방지(`../`, 절대경로, 루트 자체)는 추가 당시
+    테스트가 하나도 없던 보안 관련 로직이라 우선 커버; `listFilesRecursively`의 dotfile/dot폴더
+    스킵(Syncthing 마커 파일 회귀), 확장자 필터, 빈 폴더에서 `nil`이 아니라 빈 슬라이스를 돌려주는지
+    (JSON으로 `null`이 아니라 `[]`로 인코딩되어야 안드로이드 쪽 파서가 그대로 통과함).
 
 ## 의도적으로 제외
 
@@ -174,3 +215,16 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
 - TTS 실제 음성 재생, 타이머 자동넘김의 실제 타이밍
 - 볼륨키 물리 입력, 화면 밝기/방향 고정 — 윈도우 플래그라 검증 신뢰성 낮음
 - 실제 시스템 SAF 폴더 선택창 자동화(UiAutomator) — 기기/OS 버전마다 깨지기 쉬워 보류
+- **`PcSyncFileManager.sync()`의 실제 SAF 파일 쓰기/삭제** — 델타 계산 자체는 `PcSyncDeltaTest`로
+  커버하지만, 실제 `DocumentFile.createFile`/`openOutputStream`/`delete`까지 자동화하려면 진짜 SAF
+  트리 권한(사용자가 실제로 폴더를 선택해야 발급됨)이 필요해 안정적인 테스트 더블을 만들기 어렵다.
+  `PC_SYNC_SERVER_PLAN.md`의 "실기기 종단 검증" 기록으로 대체.
+- **`PcHostScanner`의 실제 서브넷 스캔** — `ConnectivityManager`가 돌려주는 로컬 IP와 실제 LAN 환경에
+  의존해 에뮬레이터/CI에서 의미 있게 재현하기 어렵다. `PcSyncClient.isPcSyncServer`(스캔이 후보마다
+  호출하는 핵심 판정 로직)는 `PcSyncClientTest`로 커버.
+- **Go PC 서버(`external_library/sync_server`)의 HTTP 핸들러/트레이 UI/자동 실행 전체 흐름** —
+  순수 로직(`resolveFilePath`, `listFilesRecursively`)만 `go test`로 커버하고, `server.go`의 실제
+  라우팅이나 `tray.go`/`autostart_windows.go`의 OS 연동은 `PC_SYNC_SERVER_PLAN.md`에 기록된 실기기
+  검증(포트 바인딩, `/ping`·`/list`·`/file` 실제 왕복, Windows 시작 프로그램 레지스트리 키 실행까지
+  확인)으로 대체 — Windows 트레이 UI는 Claude가 스크린샷으로 확인할 수 없어 자동화 테스트의 신뢰도
+  자체가 낮다.

@@ -4,7 +4,7 @@
 
 **[English](README.md) | [한국어](README.ko.md)**
 
-An Android text reader for local `.txt` novels, built solo end-to-end as a **fully offline, single-user app** — no server, no login, no sync.
+An Android text reader for local `.txt` novels, built solo end-to-end as a **fully offline-first, single-user app** — no accounts, no vendor lock-in, no background telemetry. The core reading experience never touches the network. Two opt-in, off-by-default features let it talk to a PC when you want that: sharing reading position with a VSCode extension, and pulling book files from a small companion PC server — both covered below.
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.09-4285F4?logo=jetpackcompose&logoColor=white)
@@ -44,6 +44,10 @@ Dedicated e-book/web-novel reader apps often ship fine-grained customization —
 - Screen-on lock and orientation lock
 - Timer-based auto page-turning or TTS narration (mutually exclusive)
 
+### Cross-device sync (optional, off by default)
+- **Reading-position sync with VSCode** — if you also read the same `.txt` files through a companion VSCode extension on a PC, whichever device read further nudges the other to catch up. No accounts: you paste one shared-secret string into both sides, and a small Supabase project (its access policy, not a login system, is the real gate) relays just the offset. Best-effort by design — any failure (offline, unverified secret) is silently skipped and never blocks local reading/saving.
+- **File sync from a PC** — a small open-source Windows tray app you run on your PC ([`external_library/sync_server`](external_library/sync_server), plain Go, no install beyond the exe) shares a folder over HTTPS on your LAN; the Android app mirrors it into your library folder one-way (PC → phone) with a "Sync now" button. No cloud storage, no account — the PC serves as the server directly, authenticated by a secret you copy over once. The self-signed TLS certificate is trust-pinned SSH-style (trust-on-first-use) rather than CA-verified, since private LAN IPs can't get a real certificate.
+
 ## Tech stack
 
 | Area | Tech |
@@ -79,17 +83,22 @@ com.moonkata.textreader/
 │   ├── file/                     — SAF folder browser, encoding detection, BookSource (zip support)
 │   ├── font/                     — Korean font catalog + download manager
 │   ├── parser/                   — TextReflower, ChapterDetector/ChapterPatternCatalog, Paginator, ChapterJumpNavigator
+│   ├── sync/                     — optional cross-device sync: VSCode reading-position client (Supabase)
+│   │                               and PC file-sync client (HTTPS + TLS fingerprint pinning)
 │   └── repository/               — BookRepository
 ├── model/                        — Paragraph, Chapter, PageBreak, FolderEntry, etc.
 ├── ui/
-│   ├── library/                  — folder browser screen, "resume reading" dialog
+│   ├── library/                  — folder browser screen, "resume reading" dialog, PC sync sheet
 │   ├── reader/                   — reader screen, quick settings / TOC / search / font / chapter-pattern sheets
 │   └── theme/                    — theme presets
 ├── tts/                          — TtsController, AutoPageTurnController
 └── util/                         — SAF / collection extension functions
+
+external_library/
+└── sync_server/                  — companion PC tray app (Go, no framework) for the file-sync feature above
 ```
 
-A file-by-file breakdown of exactly which files implement which feature, and how, lives in [`docs/FEATURES.md`](.docs/FEATURES.md).
+A file-by-file breakdown of exactly which files implement which feature, and how, lives in [`docs/FEATURES.md`](.docs/FEATURES.md). A step-by-step trace of which file/function runs for each user action lives in [`docs/USER_SCENARIOS.md`](.docs/USER_SCENARIOS.md).
 
 ## Testing
 
@@ -98,6 +107,7 @@ Tests are split into two source sets based on whether they need the Android runt
 - **`app/src/test`** — plain JUnit tests for pure logic (paragraph reflow, chapter detection, encoding detection, pagination helper math) that run on the JVM alone, no device/emulator needed.
 - **`app/src/androidTest`** — instrumented tests needing Compose rendering, Room/DataStore, or real text measurement. These verify pagination history/round-trips, chapter auto-detection, and encoding detection against real novel fixtures, plus real interaction tests for the library/settings/search/TOC sheets.
 - Font downloads are covered both by `MockWebServer`-based tests (success/failure logic against a fake local server) and by real-network tests that confirm the actual OFL font sources (GitHub, etc.) are still reachable and that applying a downloaded font actually changes the viewer — this real-network suite has already caught three font source URLs that had silently broken.
+- The two cross-device sync features are covered by pure-logic tests (relative-path normalization, the PC-sync delta calculation, TLS fingerprint hashing) plus `MockWebServer`-based protocol tests against both clients — including a real TLS handshake for the HTTPS/fingerprint-pinning client, using an on-the-fly self-signed certificate. What's left to manual real-device verification (actual SAF file writes, LAN subnet scanning, the PC tray app itself) is documented in `TESTING.md`. The Go PC server's path-traversal-prevention logic has its own `go test` suite in `external_library/sync_server`.
 - Platform behavior that Compose's semantics tree can't reliably assert on (IME visibility, real timer/TTS timing) is deliberately left out of the automated suite and verified manually — a test that passes without catching real regressions isn't worth writing.
 
 The full test plan, what each test is meant to verify, and what was deliberately left out, is tracked step by step in [`TESTING.md`](.docs/TESTING.md).
@@ -115,6 +125,8 @@ cd android-text-reader
 - Internet access is only needed for the font-download feature — everything else works fully offline
 
 Prebuilt APKs are published automatically on the [Releases](../../releases) page whenever a `vX.Y.Z` tag is pushed — see [`.github/workflows/release.yml`](.github/workflows/release.yml). Release builds are signed with the debug keystore (this project isn't distributed through the Play Store), so `assembleRelease` produces an installable APK with no extra signing setup.
+
+The optional PC file-sync companion (`external_library/sync_server`) is a standalone Go module with no runtime dependency on the Android app — `go build` inside that folder, or grab a prebuilt Windows `.exe` from the same Releases page (tagged `sync-server-vX.Y.Z`, built by [`.github/workflows/release-sync-server.yml`](.github/workflows/release-sync-server.yml)).
 
 ## Roadmap
 
