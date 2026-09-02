@@ -103,6 +103,13 @@ class ReaderViewModel(
     /** 같은 위치에서 이만큼(1분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고. */
     private val remoteSyncIdleMs = 60_000L
 
+    /**
+     * 원격이 이만큼(문자 수) 넘게 앞서 있을 때만 "더 읽으셨어요" 팝업을 띄운다 — VSCode 커서 오프셋과
+     * 안드로이드 페이지 오프셋은 애초에 가리키는 단위가 달라서(문자 단위 vs 페이지 시작 지점) 실제로는
+     * 같은 곳을 읽고 있어도 수백 자 정도 어긋날 수 있다. VSCode 쪽과 동일 값(§원격 동기화 참고).
+     */
+    private val minOffsetDiffToNotify = 500
+
     private val autoPageTurnController = AutoPageTurnController(viewModelScope) { advance() }
 
     private var lastPaginationKey: String? = null
@@ -193,7 +200,7 @@ class ReaderViewModel(
         val client = syncClientOrNull(settings) ?: return
         viewModelScope.launch {
             val remote = client.fetch(relativePath) ?: return@launch
-            if (remote.charOffset > _uiState.value.currentOffset) {
+            if (remote.charOffset - _uiState.value.currentOffset > minOffsetDiffToNotify) {
                 _uiState.update { it.copy(externalFurtherOffset = remote.charOffset) }
             }
         }

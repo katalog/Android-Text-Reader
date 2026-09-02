@@ -172,7 +172,18 @@
   - **읽기(비교)**: ① 책을 열 때(`ReaderViewModel.loadBook`) 한 번, ② 리더 화면이 다시 보이게 될
     때(`ON_START` — 화면 잠금 해제, 다른 앱에서 돌아옴)마다 다시 확인. 읽는 도중 계속 폴링하지 않는다 —
     "화면을 다시 보게 된 시점"에만 다른 기기 위치가 궁금해지므로. 받아온 `char_offset`이 현재 오프셋보다
-    크면 팝업 대상(`checkExternalFurtherPositionNow`, `onReaderResumed`).
+    **500자 넘게** 크면 팝업 대상(`checkExternalFurtherPositionNow`, `onReaderResumed`).
+  - **"500자" 데드존 (실사용 중 추가)**: 처음엔 `remote > local`이면 무조건 팝업을 띄웠는데, 실사용해보니
+    VSCode에서 다른 창 갔다가 돌아올 때 실제로는 같은 자리를 읽고 있는데도 "이동하시겠어요?" 팝업이 자주
+    떴다(체감상 10줄 안팎 차이). 원인은 두 플랫폼이 "읽은 위치"를 서로 다른 단위로 저장하기 때문 —
+    VSCode는 마지막 커서 클릭 위치(문자 단위 정밀), 안드로이드는 현재 페이지 시작 오프셋(페이지 단위
+    양자화)이라 같은 문단을 보고 있어도 수백 자 정도는 항상 어긋날 수 있다. 픽스처 소설로 실측해보니
+    (「흙」 줄당 중앙값 30자, 「무정」 63자) 10줄이 대략 300~600자였고, 이를 노벨 전체 길이 대비로 보면
+    0.1% 미만 — 팝업에 보이는 퍼센트 표시로도 거의 드러나지 않는 차이다. 그래서 두 기기 다
+    `remote.charOffset - local > 500`일 때만 팝업을 띄우도록 데드존을 추가함
+    (Android `ReaderViewModel.minOffsetDiffToNotify`, VSCode `positionTracker.ts`의
+    `MIN_OFFSET_DIFF_TO_NOTIFY`) — 값은 양쪽 다 500으로 동일하게 유지한다(§원격 동기화 상수 대칭
+    패턴, `CHECKPOINT_IDLE_MS`/`remoteSyncIdleMs`와 같은 방식).
   - **쓰기**: 페이지/문단이 바뀔 때마다 매번 올리지 않고, 아래 두 경로로만 원격에 반영한다
     (`scheduleRemoteSyncCheckpoint`, `syncNowToRemote`, `pushRemoteSync`):
     1. 같은 위치에서 1분 이상 머무르면(체크포인트 — 오프셋이 바뀔 때마다 60초 타이머를 리셋)
