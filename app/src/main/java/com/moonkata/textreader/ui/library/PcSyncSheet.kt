@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
@@ -71,7 +73,7 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
     }
 
     ModalBottomSheet(onDismissRequest = dismissAndCommit, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text("PC 파일 동기화", style = MaterialTheme.typography.titleMedium)
             Text(
                 "PC에서 moonkata-sync-server를 실행하면 공유 시크릿이 표시됩니다 — 그 값을 아래에 " +

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -310,9 +312,19 @@ private fun SyncSettingField(label: String, value: String, isSecret: Boolean = f
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // Row 전체를 toggleable로 감싼다 — 터치 영역이 스위치 썸(thumb)만큼 작은 걸 라벨까지 넓히고
+    // (Material 접근성 가이드), 그 결과로 라벨+스위치가 시맨틱 트리에서 하나로 병합돼(mergeDescendants)
+    // 라벨 텍스트만으로도 이 스위치를 정확히 찾아 조작할 수 있다 — 이 시트에 스위치가 여러 개라
+    // Row가 시맨틱 경계를 안 만들면(Row 자체는 기본적으로 그렇다) 전부 같은 부모 아래 형제로 평탄화돼,
+    // 라벨 텍스트 하나로 스위치를 구분할 방법이 없었다.
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
