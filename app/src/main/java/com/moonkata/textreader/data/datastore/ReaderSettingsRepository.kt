@@ -54,6 +54,7 @@ class ReaderSettingsRepository(private val context: Context) {
         val PC_SYNC_SECRET = stringPreferencesKey("pc_sync_secret")
         val PC_SYNC_VERIFIED_HOST = stringPreferencesKey("pc_sync_verified_host")
         val PC_SYNC_VERIFIED_SECRET = stringPreferencesKey("pc_sync_verified_secret")
+        val PC_SYNC_PINNED_FINGERPRINT = stringPreferencesKey("pc_sync_pinned_fingerprint")
     }
 
     val settingsFlow: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
@@ -96,6 +97,7 @@ class ReaderSettingsRepository(private val context: Context) {
             pcSyncSecret = prefs[Keys.PC_SYNC_SECRET] ?: defaults.pcSyncSecret,
             pcSyncVerifiedHost = prefs[Keys.PC_SYNC_VERIFIED_HOST] ?: defaults.pcSyncVerifiedHost,
             pcSyncVerifiedSecret = prefs[Keys.PC_SYNC_VERIFIED_SECRET] ?: defaults.pcSyncVerifiedSecret,
+            pcSyncPinnedFingerprint = prefs[Keys.PC_SYNC_PINNED_FINGERPRINT] ?: defaults.pcSyncPinnedFingerprint,
         )
     }
 
@@ -139,13 +141,15 @@ class ReaderSettingsRepository(private val context: Context) {
         if (verifiedSecret != null) it[Keys.SUPABASE_VERIFIED_SECRET] = verifiedSecret
     }
 
-    /** [verified]가 true면(연결 테스트 성공) 지금 값을 검증 완료 상태로도 같이 저장한다. */
-    suspend fun updatePcSyncConnection(host: String, secret: String, verified: Boolean = false) = edit {
+    /** [verified]가 true면(연결 테스트 성공) 지금 값을 검증 완료 상태로도 같이 저장한다. [fingerprint]는
+     * 연결 테스트 때 실제로 받은 PC 인증서 지문 — TOFU 방식으로 그 값을 "이 PC"로 신뢰하기로 저장. */
+    suspend fun updatePcSyncConnection(host: String, secret: String, verified: Boolean = false, fingerprint: String? = null) = edit {
         it[Keys.PC_SYNC_HOST] = host
         it[Keys.PC_SYNC_SECRET] = secret
         if (verified) {
             it[Keys.PC_SYNC_VERIFIED_HOST] = host
             it[Keys.PC_SYNC_VERIFIED_SECRET] = secret
+            if (fingerprint != null) it[Keys.PC_SYNC_PINNED_FINGERPRINT] = fingerprint
         }
     }
 

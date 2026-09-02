@@ -8,12 +8,6 @@
          링크 정보(로컬 IP)를 얻는 데만 쓰고 그 외 트래픽 감청 등은 하지 않음 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- PC 파일 동기화가 평범한 http(TLS 없음)를 쓰는 이유와 범위는 res/xml/network_security_config.xml
-         참고 — 실제 cleartext 허용 여부는 usesCleartextTraffic이 아니라 그 설정 파일이 결정한다
-         (networkSecurityConfig가 있으면 usesCleartextTraffic은 무시됨). debug 빌드는 별도
-         src/debug/AndroidManifest.xml + src/debug/res/xml/network_security_config.xml로 재정의됨
-         (MockWebServer 테스트 때문에 예전부터 있던 파일 — 실기기 검증 중 이게 있는 줄 모르고
-         usesCleartextTraffic만 켰다가 여전히 막히는 걸 겪고 알게 됨). -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -21,7 +15,6 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.TextReader">
         <activity

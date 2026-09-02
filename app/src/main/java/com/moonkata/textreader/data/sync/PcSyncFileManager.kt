@@ -36,9 +36,14 @@ class PcSyncFileManager(
         val remoteByKey = remoteFiles.associateBy { keyOf(it.relativePath) }
         val localByKey = localFiles.associateBy { keyOf(it.relativePath) }
 
+        // 크기만 비교한다 — 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 되지 PC 원본의 수정시각을
+        // 그대로 못 물려받는다(SAF가 문서 수정시각을 임의로 설정하게 허용 안 하는 제공자가 많음).
+        // 수정시각까지 비교 조건에 넣으면 재동기화 때마다 로컬 시각과 원격 시각이 (내용은 그대로인데도)
+        // 항상 달라서 안 바뀐 파일까지 매번 전부 다시 받는 문제가 실사용 중 확인됐다. 소설 텍스트 파일은
+        // 내용이 바뀌면 거의 항상 글자 수(=크기)도 같이 바뀌니 크기만으로도 실용적으로 충분하다.
         val toWrite = remoteByKey.entries.filter { (key, remote) ->
             val local = localByKey[key]
-            local == null || local.sizeBytes != remote.sizeBytes || local.lastModifiedMillis != remote.lastModifiedMillis
+            local == null || local.sizeBytes != remote.sizeBytes
         }.map { it.value }
         val toDelete = localByKey.filterKeys { it !in remoteByKey }.values.toList()
 

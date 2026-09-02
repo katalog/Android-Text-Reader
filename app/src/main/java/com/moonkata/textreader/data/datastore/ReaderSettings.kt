@@ -64,4 +64,8 @@ data class ReaderSettings(
      * "연결됨" 표시. */
     val pcSyncVerifiedHost: String = "",
     val pcSyncVerifiedSecret: String = "",
+    /** PC 서버의 자체 서명 인증서 지문(SHA-256) — 연결 테스트 성공 시 그때 받은 인증서를 그대로
+     * "이 PC"로 신뢰하기로 저장해두는 값(TOFU, §5 참고). 사용자가 직접 입력하는 값이 아니라 앱이
+     * 연결 테스트 때 자동으로 채운다. */
+    val pcSyncPinnedFingerprint: String = "",
 )

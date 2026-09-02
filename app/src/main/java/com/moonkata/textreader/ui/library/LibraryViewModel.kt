@@ -209,11 +209,16 @@ class LibraryViewModel(
         viewModelScope.launch { settingsRepository.updatePcSyncConnection(host, secret, verified = false) }
     }
 
-    /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. */
+    /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. 이때 받은 PC
+     * 인증서 지문도 같이 저장(TOFU) — 클라이언트를 pinnedFingerprint 없이(=아직 아무 인증서나 믿는
+     * 상태로) 만들어서, 실제로 받은 인증서를 그 자리에서 "이 PC"로 등록하는 셈이다. */
     suspend fun testPcSyncConnection(host: String, secret: String): Boolean {
         if (host.isBlank() || secret.isBlank()) return false
-        val success = PcSyncClient(host, secret).testConnection()
-        if (success) settingsRepository.updatePcSyncConnection(host, secret, verified = true)
+        val client = PcSyncClient(host, secret)
+        val success = client.testConnection()
+        if (success) {
+            settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = client.lastSeenFingerprint)
+        }
         return success
     }
 
@@ -241,7 +246,9 @@ class LibraryViewModel(
                 return@launch
             }
             _pcSyncState.update { PcSyncUiState(isSyncing = true) }
-            val client = PcSyncClient(settings.pcSyncHost, settings.pcSyncSecret)
+            // 평소 동기화는 연결 테스트 때 저장해둔 지문으로 고정 검증한다(pinnedFingerprint 지정) —
+            // 그 지문과 다른 인증서를 내미는 서버는 거부된다.
+            val client = PcSyncClient(settings.pcSyncHost, settings.pcSyncSecret, settings.pcSyncPinnedFingerprint)
             val manager = PcSyncFileManager(getApplication(), client)
             val result = manager.sync(rootUri) { progress ->
                 _pcSyncState.update { it.copy(progress = progress) }
