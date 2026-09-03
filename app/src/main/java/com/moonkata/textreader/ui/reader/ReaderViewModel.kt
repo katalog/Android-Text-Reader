@@ -257,14 +257,22 @@ class ReaderViewModel(
         return ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, settings.supabaseSharedSecret)
     }
 
+    private var lastSupabaseTestError: String? = null
+
     /** 설정 화면 "연결 테스트" 버튼 — 성공하면 시크릿과 함께 검증 상태를 같이 커밋한다. */
     override suspend fun testSupabaseConnection(secret: String): Boolean {
-        if (secret.isBlank()) return false
+        if (secret.isBlank()) {
+            lastSupabaseTestError = "시크릿이 비어있음"
+            return false
+        }
         val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
         val success = client.testConnection()
+        lastSupabaseTestError = if (success) null else client.lastTestConnectionError
         if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
         return success
     }
+
+    override fun lastSupabaseTestError(): String? = lastSupabaseTestError
 
     fun dismissExternalPositionPrompt() {
         _uiState.update { it.copy(externalFurtherOffset = null) }

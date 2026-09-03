@@ -350,13 +350,21 @@ class LibraryViewModel(
     override fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
     override fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
 
+    private var lastSupabaseTestError: String? = null
+
     override suspend fun testSupabaseConnection(secret: String): Boolean {
-        if (secret.isBlank()) return false
+        if (secret.isBlank()) {
+            lastSupabaseTestError = "시크릿이 비어있음"
+            return false
+        }
         val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
         val success = client.testConnection()
+        lastSupabaseTestError = if (success) null else client.lastTestConnectionError
         if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
         return success
     }
+
+    override fun lastSupabaseTestError(): String? = lastSupabaseTestError
 
     private fun launchSetting(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

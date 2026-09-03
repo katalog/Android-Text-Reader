@@ -58,4 +58,7 @@ interface SettingsController {
     fun isFontDownloaded(entry: FontCatalogEntry): Boolean
 
     suspend fun testSupabaseConnection(secret: String): Boolean
+
+    /** 마지막 [testSupabaseConnection] 실패 원인(성공했거나 아직 시도 전이면 null) — 화면에 그대로 보여준다. */
+    fun lastSupabaseTestError(): String?
 }

@@ -279,7 +279,7 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
                         Text("연결됨", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
                     }
                     syncTestFailed -> Text(
-                        "연결 실패 — 시크릿을 확인하세요",
+                        "연결 실패 — ${viewModel.lastSupabaseTestError() ?: "시크릿을 확인하세요"}",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
