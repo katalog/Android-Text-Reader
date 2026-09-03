@@ -2,7 +2,8 @@
 
 **상태**: P1~P3, A1~A2/A4 전부 완료. HTTPS(자체 서명 인증서 + TOFU 지문 고정)로 전환 완료 — cleartext
 설정 전부 제거함. 델타 비교에서 로컬 수정시각 의존성 제거(재동기화 때 안 바뀐 파일까지 매번 다시
-받던 버그 수정). [SMB_FILE_SYNC_PLAN.md](SMB_FILE_SYNC_PLAN.md)를 대체.
+받던 버그 수정). [SMB_FILE_SYNC_PLAN.md](SMB_FILE_SYNC_PLAN.md)를 대체. 여러 사용자 대상 QR 페어링
+등 공개 배포용 후속 작업은 [SYNC_MULTIUSER_PLAN.md](SYNC_MULTIUSER_PLAN.md) 참고.
 
 ## 배경
 

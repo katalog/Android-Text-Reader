@@ -41,6 +41,7 @@ Repository), DI 프레임워크 없음.
 - `RealFontDownloadIntegrationTest`, `FontApplyRepaginatesViewerTest`(androidTest)는 실제 인터넷 연결이 필요한 실 네트워크 테스트 — 오프라인이거나 폰트 배포처 URL이 깨지면 실패하는 게 의도된 동작.
 - Phase 3(`PageNavigationRoundTripTest` 등)과 챕터 인식 회귀 테스트는 `app/src/androidTest/assets/books/`에 커밋된 퍼블릭 도메인 소설 픽스처(이광수 「무정」/「흙」, Gutenberg의 「Moby-Dick」/「Dracula」)를 사용하며, 혹시라도 없는 환경에서는 `Assume`으로 자동 스킵됨.
 - 릴리스 서명: `RELEASE_KEYSTORE_PATH` 등 환경 변수가 없으면 `assembleRelease`도 조용히 디버그 서명으로 폴백 — 이 저장소(공개)에는 키스토어를 절대 커밋하지 않는다. 버전명/코드도 `RELEASE_VERSION_NAME`/`RELEASE_VERSION_CODE` 환경 변수([.github/workflows/release.yml](.github/workflows/release.yml)가 태그 push 시 주입)가 없으면 고정 폴백값(`1.0`/`1`)을 쓴다.
+- VSCode 읽기 위치 동기화용 Supabase URL/publishable key도 같은 이유로 소스에 안 박아두고 `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` 환경 변수(로컬은 `local.properties`로 대체 가능)로 주입 — 값이 없으면 빈 문자열로 조용히 빌드되고 VSCode 동기화 기능만 비활성화됨(`app/build.gradle.kts`, [.docs/SYNC_MULTIUSER_PLAN.md](.docs/SYNC_MULTIUSER_PLAN.md) 스테이지 3).
 
 ## 테스트를 어디에 둘지 결정하는 기준
 

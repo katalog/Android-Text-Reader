@@ -7,6 +7,10 @@
     <!-- PC 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md)의 로컬 서브넷 스캔용 — 현재 연결된 네트워크의
          링크 정보(로컬 IP)를 얻는 데만 쓰고 그 외 트래픽 감청 등은 하지 않음 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 동기화 페어링 QR 스캔용(.docs/SYNC_MULTIUSER_PLAN.md 스테이지 4) — 선택 기능이라 카메라 없는
+         기기도 앱을 설치할 수 있어야 해서 required="false"로 둔다. 권한 거부 시 수동 입력으로 폴백. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="true"

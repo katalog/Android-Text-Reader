@@ -226,6 +226,23 @@ class LibraryViewModel(
     suspend fun scanForPcSyncHosts(): List<String> = PcHostScanner(getApplication()).scanLocalSubnet()
 
     /**
+     * QR 페어링(.docs/SYNC_MULTIUSER_PLAN.md 스테이지 6) 전용 — PC 트레이 서버의 `/pair` QR에는
+     * 호스트/시크릿뿐 아니라 인증서 지문도 이미 실려있다. 그래서 [testPcSyncConnection]처럼 먼저
+     * lenient TLS로 접속해 지문을 "그 자리에서 처음 본 값"으로 등록하는 TOFU 단계를 거칠 필요 없이,
+     * 처음부터 그 지문으로 pinned TLS 연결을 시도한다 — 성공하면 "QR이 알려준 서버가 실제로 그
+     * 인증서를 갖고 있다"까지 확인된 것이라 TOFU보다 신뢰 근거가 더 강하다.
+     */
+    suspend fun testPcSyncConnectionWithFingerprint(host: String, secret: String, fingerprint: String): Boolean {
+        if (host.isBlank() || secret.isBlank() || fingerprint.isBlank()) return false
+        val client = PcSyncClient(host, secret, fingerprint)
+        val success = client.testConnection()
+        if (success) {
+            settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = fingerprint)
+        }
+        return success
+    }
+
+    /**
      * "지금 동기화" 버튼 — 연결 테스트를 통과한 설정으로만 동작한다(Supabase 시크릿과 동일하게 "테스트
      * 성공 시점의 값과 지금 설정값이 정확히 같을 때"만 검증된 것으로 침). 진행 상태는 [pcSyncState]로
      * 노출되고, 끝나면 [PcSyncUiState.result] 또는 [PcSyncUiState.errorMessage]가 채워진다.

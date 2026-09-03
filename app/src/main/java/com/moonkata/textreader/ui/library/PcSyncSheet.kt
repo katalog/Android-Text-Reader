@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.moonkata.textreader.data.datastore.ReaderSettings
+import com.moonkata.textreader.data.sync.QrPairingPayload
+import com.moonkata.textreader.ui.qr.QrScannerDialog
 import kotlinx.coroutines.launch
 
 /**
@@ -64,6 +66,7 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
     var scanResults by remember { mutableStateOf<List<String>?>(null) }
     var testing by remember { mutableStateOf(false) }
     var testFailed by remember { mutableStateOf(false) }
+    var showQrScanner by remember { mutableStateOf(false) }
 
     val dismissAndCommit: () -> Unit = {
         if (hostDraft != settings.pcSyncHost || secretDraft != settings.pcSyncSecret) {
@@ -76,11 +79,15 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text("PC 파일 동기화", style = MaterialTheme.typography.titleMedium)
             Text(
-                "PC에서 moonkata-sync-server를 실행하면 공유 시크릿이 표시됩니다 — 그 값을 아래에 " +
-                    "붙여넣고 PC를 찾아 연결 테스트를 해보세요.",
+                "PC 트레이 메뉴의 \"동기화 QR 보기\"를 스캔하면 주소·시크릿이 자동으로 채워지고 연결까지 " +
+                    "바로 끝납니다. 카메라를 쓸 수 없다면 아래에서 PC를 찾거나 직접 입력하세요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showQrScanner = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("QR로 연결")
+            }
             Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
@@ -239,5 +246,32 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                 Text("닫기")
             }
         }
+    }
+
+    if (showQrScanner) {
+        // QR 스캔 성공 시 호스트/시크릿을 채우고 바로 pinned TLS로 연결 테스트까지 자동 실행한다 —
+        // "PC 찾기" 서브넷 스캔과 시크릿 입력을 둘 다 건너뛴다(QR에 이미 다 있으므로). 잘못된
+        // QR/권한 거부는 QrScannerDialog가 onDismiss로 처리해 여기서는 아무 일도 안 한다.
+        QrScannerDialog(
+            onResult = { payload ->
+                showQrScanner = false
+                if (payload is QrPairingPayload.PcSync) {
+                    hostDraft = payload.host
+                    secretDraft = payload.secret
+                    testFailed = false
+                    testing = true
+                    coroutineScope.launch {
+                        val success = viewModel.testPcSyncConnectionWithFingerprint(
+                            payload.host,
+                            payload.secret,
+                            payload.fingerprint,
+                        )
+                        testing = false
+                        testFailed = !success
+                    }
+                }
+            },
+            onDismiss = { showQrScanner = false },
+        )
     }
 }

@@ -52,6 +52,8 @@ import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
 import com.moonkata.textreader.data.datastore.TouchTurnMode
+import com.moonkata.textreader.data.sync.QrPairingPayload
+import com.moonkata.textreader.ui.qr.QrScannerDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +71,18 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
     var sharedSecretDraft by remember { mutableStateOf(settings.supabaseSharedSecret) }
     var testingSync by remember { mutableStateOf(false) }
     var syncTestFailed by remember { mutableStateOf(false) }
+    var showQrScanner by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    val runSyncTest: (String) -> Unit = { secret ->
+        testingSync = true
+        syncTestFailed = false
+        coroutineScope.launch {
+            val success = viewModel.testSupabaseConnection(secret)
+            testingSync = false
+            syncTestFailed = !success
+        }
+    }
 
     val dismissAndCommitSync: () -> Unit = {
         if (sharedSecretDraft != settings.supabaseSharedSecret) viewModel.setSupabaseSharedSecret(sharedSecretDraft)
@@ -234,10 +247,14 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
             SectionDivider()
             Text("VSCode 읽기 위치 동기화", style = MaterialTheme.typography.titleMedium)
             Text(
-                "PC(VSCode)에서 만든 공유 시크릿을 붙여넣고 연결 테스트를 눌러 확인하세요.",
+                "VSCode에서 \"Moonkata Sync: QR로 연결\"로 뜬 QR을 스캔하거나, 공유 시크릿을 직접 붙여넣고 연결 테스트를 눌러 확인하세요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showQrScanner = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("QR로 연결")
+            }
             Spacer(Modifier.height(8.dp))
             SyncSettingField("공유 시크릿", sharedSecretDraft, isSecret = true) {
                 sharedSecretDraft = it
@@ -246,15 +263,7 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
             val isVerified = sharedSecretDraft.isNotBlank() && sharedSecretDraft == settings.supabaseVerifiedSecret
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = {
-                        testingSync = true
-                        syncTestFailed = false
-                        coroutineScope.launch {
-                            val success = viewModel.testSupabaseConnection(sharedSecretDraft)
-                            testingSync = false
-                            syncTestFailed = !success
-                        }
-                    },
+                    onClick = { runSyncTest(sharedSecretDraft) },
                     enabled = sharedSecretDraft.isNotBlank() && !testingSync,
                 ) {
                     if (testingSync) {
@@ -285,6 +294,21 @@ fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onD
     }
     if (showChapterPatterns) {
         ChapterPatternSheet(viewModel = viewModel, settings = settings, onDismiss = { showChapterPatterns = false })
+    }
+    if (showQrScanner) {
+        // QR 스캔 성공 시 시크릿을 채우고 바로 연결 테스트까지 자동 실행한다 — 스캔 한 번으로 끝나게.
+        // 잘못된 QR/모르는 type/권한 거부는 QrScannerDialog가 알아서 onDismiss로 닫아, 여기서는 아무
+        // 일도 안 하고 시트가 닫힌 뒤 사용자가 위 수동 입력 필드로 폴백할 수 있게 그대로 둔다.
+        QrScannerDialog(
+            onResult = { payload ->
+                showQrScanner = false
+                if (payload is QrPairingPayload.VscodeSync) {
+                    sharedSecretDraft = payload.secret
+                    runSyncTest(payload.secret)
+                }
+            },
+            onDismiss = { showQrScanner = false },
+        )
     }
 }
 

@@ -100,8 +100,22 @@ class ReaderViewModel(
     private var ttsPendingRange: Pair<Int, Int>? = null
     private val ttsChunkChars = 500
 
-    /** 같은 위치에서 이만큼(1분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고. */
-    private val remoteSyncIdleMs = 60_000L
+    /**
+     * 같은 위치에서 이만큼(5분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고.
+     * 원래 1분이었는데, 사용자가 늘어날 걸 감안해 화면 이탈 시 즉시 반영 경로는 그대로 두고 이
+     * 간격만 늘려 원격 쓰기 빈도를 줄였다(SYNC_MULTIUSER_PLAN.md 스테이지 2).
+     */
+    private val remoteSyncIdleMs = 300_000L
+
+    /**
+     * 원격 조회(§checkRemoteAndMaybeNotify) 최소 간격 — 화면이 짧은 시간 안에 백그라운드↔포그라운드를
+     * 반복하면(예: 최근 앱 목록을 열었다 바로 닫기) ON_START가 그때마다 발생해 중복 조회가 나갈 수
+     * 있어, 마지막 조회 후 이 시간 안에는 다시 조회하지 않는다(SYNC_MULTIUSER_PLAN.md 스테이지 2).
+     */
+    private val remoteFetchCooldownMs = 30_000L
+
+    /** 마지막으로 원격 조회를 실제로 시도한 시각(ms) — §remoteFetchCooldownMs 참고. */
+    private var lastRemoteFetchAtMs = 0L
 
     /**
      * 원격이 이만큼(문자 수) 넘게 앞서 있을 때만 "더 읽으셨어요" 팝업을 띄운다 — VSCode 커서 오프셋과
@@ -198,6 +212,9 @@ class ReaderViewModel(
     private fun checkRemoteAndMaybeNotify(relativePath: String, localOffset: Int, settings: ReaderSettings) {
         if (relativePath.isEmpty()) return
         val client = syncClientOrNull(settings) ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastRemoteFetchAtMs < remoteFetchCooldownMs) return
+        lastRemoteFetchAtMs = now
         viewModelScope.launch {
             val remote = client.fetch(relativePath) ?: return@launch
             if (remote.charOffset - _uiState.value.currentOffset > minOffsetDiffToNotify) {
@@ -404,7 +421,7 @@ class ReaderViewModel(
 
     // --- 원격(Supabase) 동기화 ---
     // 페이지/문단 이동마다 매번 올리면 낭비라, 아래 두 경로로만 원격에 반영한다:
-    // 1) 같은 위치에서 REMOTE_SYNC_IDLE_MS(1분) 이상 머무르면(체크포인트)
+    // 1) 같은 위치에서 remoteSyncIdleMs(5분) 이상 머무르면(체크포인트)
     // 2) 리더 화면을 벗어나는 시점(뒤로가기 → onCleared / 화면 꺼짐·홈·다른 앱 전환 → ON_STOP) 즉시
 
     private var remoteCheckpointJob: Job? = null
