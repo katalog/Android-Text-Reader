@@ -12,8 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Repository), DI 프레임워크 없음.
 
 자세한 기능 목록과 설계 배경은 [README.md](README.md)(영문) / [README.ko.md](README.ko.md)(한글) 참고.
-기능별 파일 단위 구현 설명은 [.docs/FEATURES.md](.docs/FEATURES.md), 사용자 시나리오별 코드 실행
-흐름은 [.docs/USER_SCENARIOS.md](.docs/USER_SCENARIOS.md), 백로그는 [.docs/IDEAS.md](.docs/IDEAS.md).
+처음 이 저장소에 들어왔다면 [.docs/ONBOARDING.md](.docs/ONBOARDING.md)(빌드/테스트 실행법, 코드 지도,
+자주 밟는 함정) → [.docs/DESIGN_RATIONALE.md](.docs/DESIGN_RATIONALE.md)("왜 이렇게 만들었나" — 각
+결정을 순진한 구현과 대조해 설명) 순으로 읽으면 된다. 기능별 파일 단위 구현 설명은
+[.docs/FEATURES.md](.docs/FEATURES.md), 사용자 시나리오별 코드 실행 흐름은
+[.docs/USER_SCENARIOS.md](.docs/USER_SCENARIOS.md), 백로그는 [.docs/IDEAS.md](.docs/IDEAS.md).
 
 ## 빌드 & 테스트 명령어
 
@@ -91,7 +94,7 @@ com.moonkata.textreader/
 └── util/                         — SAF/컬렉션 확장 함수
 ```
 
-`ui/reader/ReaderViewModel`이 리더 화면의 핵심 상태 머신(약 500줄) — 페이지네이션 트리거, 방문 이력 스택, 검색, 목차, 챕터 점프, 자동 넘김/TTS 조율이 모두 여기 모임. 리더 관련 기능을 고칠 때는 대부분 이 파일에서 시작하게 됨.
+`ui/reader/ReaderViewModel`이 리더 화면의 핵심 상태 머신(약 700줄) — 페이지네이션 트리거, 방문 이력 스택, 검색, 목차, 챕터 점프, 자동 넘김/TTS, 원격 동기화 조율이 모두 여기 모임. 리더 관련 기능을 고칠 때는 대부분 이 파일에서 시작하게 됨.
 
 `ui/reader/*Sheet.kt`(QuickSettingsSheet, TocSheet, SearchSheet, FontPickerSheet, ChapterPatternSheet)는 각각 `ModalBottomSheet` 하나씩 — `shouldDismissOnBackPress = false`로 두는 이유는 TESTING.md의 "의도적으로 제외" 항목 참고(Compose Material3의 알려진 제약, 우리 쪽 버그 아님).
 
