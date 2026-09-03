@@ -22,8 +22,14 @@ class ReadingPositionSyncClient(
     private val publishableKey: String,
     private val sharedSecret: String,
 ) {
+    // baseUrl은 프로젝트 기본 주소(예: https://xxx.supabase.co)만 와야 하는데, 실사용 중 GitHub
+    // 시크릿에 "/rest/v1"까지 같이 등록돼 있던 적이 실제로 있었다 — 그 상태로 아래에서 또
+    // "/rest/v1/reading_positions"를 붙이면 ".../rest/v1/rest/v1/reading_positions"처럼 경로가
+    // 겹쳐서 PostgREST가 "PGRST125: invalid path specified in request url"로 거부한다. trim()으로
+    // 공백/개행도 같이 방어(build.gradle.kts에서 한 번 trim하지만 이 클라이언트를 다른 곳에서도 쓸 수
+    // 있어 여기서 한 번 더), removeSuffix로 실수로 중복된 "/rest/v1"도 걷어낸다.
     private val restBase: String
-        get() = "${baseUrl.trimEnd('/')}/rest/v1/reading_positions"
+        get() = "${baseUrl.trim().trimEnd('/').removeSuffix("/rest/v1")}/rest/v1/reading_positions"
 
     /**
      * [testConnection]이 실패했을 때 원인을 담아둔다 — 예전엔 어떤 예외든 조용히 false 하나로만

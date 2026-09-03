@@ -23,9 +23,14 @@ val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
-val supabaseUrl = System.getenv("SUPABASE_URL") ?: localProperties.getProperty("SUPABASE_URL") ?: ""
-val supabasePublishableKey = System.getenv("SUPABASE_PUBLISHABLE_KEY")
-    ?: localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY") ?: ""
+// .trim()이 중요하다 — GitHub Actions 시크릿은 웹 UI에 붙여넣을 때 끝에 개행/공백이 실수로 같이
+// 들어가기 쉬운데, 그 상태로 URL 문자열 끝에 남으면 "https://...supabase.co /rest/v1/..."처럼 뒤에
+// 공백이 낀 요청 경로가 만들어져 PostgREST가 "PGRST125: invalid path specified in request url"로
+// 거부한다(실사용 중 실제로 겪음 — trimEnd('/')만으론 공백을 못 걸러냄). 로컬 local.properties 값도
+// 사람이 손으로 옮겨 적다 실수할 수 있어 똑같이 trim한다.
+val supabaseUrl = (System.getenv("SUPABASE_URL") ?: localProperties.getProperty("SUPABASE_URL") ?: "").trim()
+val supabasePublishableKey = (System.getenv("SUPABASE_PUBLISHABLE_KEY")
+    ?: localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY") ?: "").trim()
 
 // release.yml이 태그(v1.1 → "1.1")와 CI 실행 번호로 이 두 값을 넘긴다 — 없으면(로컬 빌드) 예전
 // 고정값으로 폴백한다. 이게 없으면 어떤 태그로 릴리스를 뽑든 설치된 APK의 실제 버전 표시는 항상
