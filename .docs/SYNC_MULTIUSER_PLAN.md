@@ -262,6 +262,31 @@ for each row execute function prune_old_reading_positions();
 "연결됨" 배지까지 자동으로 뜨는 것)는 스테이지 7에서 스테이지 6과 함께 확인** — 카메라·webview 렌더링
 둘 다 실제 화면이 필요해 지금 단계에서는 자동화로 검증할 수 없다.
 
+> **⚠️ 실기기 E2E 중 실제로 잡은 버그 세 개(2026-09-03, v1.5.0-beta.2~5)**:
+> 1. **`context.secrets`는 확장을 재설치해도 안 지워진다** — "QR로 연결"이 기존 시크릿을 재사용하는
+>    설계라(§위 참고), 예전에 페어링해둔 VSCode 인스턴스에서는 QR을 처음 띄워도 곧바로 "연결됨"으로
+>    떠서 "새 페어링"을 테스트할 방법이 없었다. `moonkata-reader-sync.forgetSecret`("Moonkata Sync:
+>    연결 해제") 커맨드를 새로 추가해 저장된 시크릿/검증 상태를 지울 수 있게 함(v1.5.1).
+> 2. **`testConnection()`이 모든 예외를 조용히 `false` 하나로만 뭉개서 원인을 전혀 알 수 없었다** —
+>    로그조차 안 남겼다. `ReadingPositionSyncClient.lastTestConnectionError`를 추가해 예외 종류·
+>    HTTP 상태코드·응답 본문·SUPABASE_URL 미주입 여부까지 구분해서 기록하고, `SettingsController.
+>    lastSupabaseTestError()`로 화면에 그대로 노출하게 함(v1.5.0-beta.4). 이게 없었으면 아래 3번을
+>    찾는 데 훨씬 오래 걸렸을 것.
+> 3. **진짜 원인 — `SUPABASE_URL` GitHub 시크릿에 `/rest/v1`이 중복으로 포함돼 있었다.** 릴리스 APK를
+>    직접 디컴파일(`unzip` + DEX 문자열 검색)해서 `https://xxx.supabase.co/rest/v1`가 그대로 박혀있는
+>    걸 확인 — `ReadingPositionSyncClient.restBase`가 여기에 다시 `/rest/v1/reading_positions`를
+>    붙이면서 경로가 `.../rest/v1/rest/v1/reading_positions`로 겹쳐 Supabase가
+>    `PGRST125: invalid path specified in request url`로 거부했다. 로컬 `local.properties`는 처음부터
+>    올바른 값이라 디버그 빌드에서는 재현이 안 됐다(그래서 "로컬은 되는데 릴리스만 안 됨"이 첫 단서).
+>    `build.gradle.kts`에서 값을 `.trim()`하고, `ReadingPositionSyncClient.restBase`에서 중복된
+>    `/rest/v1` 접미사를 `removeSuffix`로 방어(GitHub 시크릿을 다시 잘못 등록해도 안 깨짐), 실제
+>    corruption 패턴을 그대로 재현하는 회귀 테스트(`restBase_stripsDuplicateRestV1SuffixAndWhitespace_
+>    fromBaseUrl`) 추가(v1.5.0-beta.5). 실기기 연결 테스트 성공까지 확인.
+>
+> **교훈**: GitHub Actions 시크릿은 값을 다시 읽어볼 방법이 없어서(write-only), "설정은 했다는데 왜
+> 안 되지" 상황에서 릴리스 산출물(APK)을 직접 까서 실제로 뭐가 박혔는지 확인하는 게 가장 확실한
+> 디버깅 경로였다 — 추측으로 여러 번 재배포하기 전에 먼저 시도해볼 만하다.
+
 ### 스테이지 6 — PC 파일 동기화 QR 페어링 ✅ 완료 (2026-09-03)
 
 - **PC 서버**(`external_library/sync_server/`, Go): 이미 떠 있는 HTTPS 리스너에 `GET /pair`(인증
