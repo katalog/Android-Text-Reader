@@ -12,8 +12,10 @@ sealed class QrPairingPayload {
     data class VscodeSync(val secret: String) : QrPairingPayload()
 
     /**
-     * PC 파일 동기화용 — `{"type":"pc_sync","host":"192.168.0.12:58221","secret":"...","fingerprint":"AB:CD:..."}`
-     * `host`는 포트까지 포함한 문자열(`PcSyncClient`가 기대하는 형식과 동일).
+     * PC 파일 동기화용 — `{"type":"pc_sync","host":"192.168.0.12","secret":"...","fingerprint":"AB:CD:..."}`
+     * `host`는 포트 없이 IP만(`PcSyncClient`가 고정 포트를 스스로 붙이므로) — 처음엔 "포트까지 포함한
+     * 문자열"로 잘못 문서화/구현해서 `PcSyncClient`가 포트를 한 번 더 붙여 "IP:포트:포트"가 되는 실제
+     * 버그가 있었다(실사용 중 발견, MalformedURLException). QR을 만드는 `pair.go`도 같이 고침.
      */
     data class PcSync(val host: String, val secret: String, val fingerprint: String) : QrPairingPayload()
 

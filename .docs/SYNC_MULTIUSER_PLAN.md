@@ -194,8 +194,12 @@ for each row execute function prune_old_reading_positions();
   분기하는 공용 스키마:
   ```json
   {"type": "vscode_sync", "secret": "..."}
-  {"type": "pc_sync", "host": "192.168.0.12:58221", "secret": "...", "fingerprint": "AB:CD:..."}
+  {"type": "pc_sync", "host": "192.168.0.12", "secret": "...", "fingerprint": "AB:CD:..."}
   ```
+  > ⚠️ `host`는 포트 없이 IP만 담아야 한다 — 처음엔 "192.168.0.12:58221"처럼 포트까지 포함해서
+  > 설계/구현했는데, `PcSyncClient`가 고정 포트(`PC_SYNC_PORT`)를 스스로 붙이는 구조라 실제로는
+  > "IP:포트:포트"로 겹쳐 `MalformedURLException`이 나는 진짜 버그였다(스테이지 7 실기기 검증 중
+  > 발견, v1.5.0-beta.6에서 `pair.go`/`QrPairingPayload.kt` 둘 다 수정).
   필수 필드 누락/파싱 실패/모르는 `type`은 전부 `null`로 통일(예외를 던지지 않음) — 호출부가 "잘못된
   QR"로 한 갈래로 처리할 수 있게. `app/src/test`에 `QrPairingPayloadTest`(6케이스: 정상 파싱 2종,
   콜론이 여러 개 섞인 fingerprint/host 값도 정확히 보존되는지, 모르는 type/필드 누락/깨진 JSON/type
