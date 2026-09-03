@@ -1,12 +1,16 @@
 # 사용자 시나리오별 코드 실행 흐름
 
-`FEATURES.md`가 기능별로 "이 기능은 이 파일들로 구현되어 있다"를 정리한 카탈로그라면, 이 문서는 반대
-방향입니다 — "사용자가 이렇게 조작하면 어떤 파일의 어떤 함수가 어떤 순서로 실행되는가"를 시나리오
-단위로 추적합니다. 코드를 처음 보는 사람이 특정 동작 하나를 따라가며 전체 흐름을 파악할 때 쓰는 용도로,
-설계 배경(왜 이렇게 만들었는지)은 각 시나리오 끝에 붙은 `FEATURES.md` 절 번호를 참고하세요.
+[FEATURES.md](FEATURES.md)가 "이 기능은 이 파일들로 구현돼 있다"는 카탈로그라면, 이 문서는 그 반대
+방향입니다 — **"사용자가 이렇게 조작하면 어떤 파일의 어떤 함수가 어떤 순서로 실행되는가"**를 시나리오
+단위로 따라갑니다. 코드를 처음 보고 동작 하나를 끝까지 쫓아가 보고 싶을 때 이 문서를 펴면 됩니다. "왜
+이렇게 짰는지"는 다루지 않습니다 — 각 시나리오 끝의 `FEATURES.md` 절 번호를 따라가면 그 설계 배경이
+있고, 거기서도 안 풀리면 [DESIGN_RATIONALE.md](DESIGN_RATIONALE.md)로 가세요.
 
 파일 경로는 모두 `app/src/main/java/com/moonkata/textreader/` 기준 상대경로이고, PC 서버 쪽은
 `external_library/sync_server/` 기준입니다.
+
+> **읽는 요령**: 번호가 매겨진 단계는 실제 호출 순서 그대로입니다. ⚠️ 표시가 붙은 단계는 "왜 이렇게
+> 갈라지는지" 알아야 나머지가 이해되는 지점이니 건너뛰지 마세요.
 
 ---
 
@@ -41,6 +45,11 @@
 3. "이어서 읽기" 탭 → `reader/{bookId}`로 네비게이션(아래 3번 시나리오로 이어짐)
 4. "취소" → `resumeCandidate`만 비우고 서재 화면 유지
 
+> ⚠️ 후보로 올리기 전에 파일이 지금도 실제로 열리는지(`bookFileExists`)를 확인합니다. 이걸 빼면,
+> 파일이 삭제되거나 이동된 책도 후보로 뜨고 "계속 보기"를 누르는 순간 처리 안 된
+> `FileNotFoundException`으로 앱이 죽습니다 — 실제로 있었던 버그이고 `ResumeCandidateFileExistsTest`가
+> 재발 방지 테스트입니다.
+
 ## 3. 서재에서 책 파일 탭 → 리더 진입 → 첫 페이지 표시 (FEATURES.md §3, §4, §5, §8)
 
 1. `LibraryScreen`에서 `.txt`(또는 zip 내부 `.txt`) 항목 탭 → `LibraryViewModel`이
@@ -56,8 +65,9 @@
      리스트 생성
    - `_uiState`에 `fullText`/`paragraphs`/`currentOffset`(저장된 `lastReadCharOffset`)을 반영 —
      로딩 게이트 해제, 첫 페이지 표시 가능
-   - `redetectChapters(settings)`를 백그라운드로 트리거(첫 페이지 표시를 막지 않음) —
-     `data/parser/ChapterDetector.kt`의 `detect` 결과가 나중에 `chapters`에 채워짐
+   - `redetectChapters(settings)`를 백그라운드로 트리거 — ⚠️ 여기서 첫 페이지 표시를 기다리지 않는
+     게 핵심입니다. `data/parser/ChapterDetector.kt`의 `detect` 결과는 나중에 `chapters`로 따로
+     채워지고, 사용자는 그 사이에도 이미 첫 페이지를 보고 있습니다.
    - `checkRemoteAndMaybeNotify` 호출(VSCode 동기화가 켜져 있으면 — 15번 시나리오로 이어짐)
 4. 페이지 모드면 `ui/reader/ReaderPagerContent.kt`의 뷰포트 측정 콜백 `onViewportMeasured`가
    `data/parser/Paginator.kt`의 `paginateFrom(..., maxPages = 1)`로 현재 페이지 한 장만 계산해 표시.
@@ -72,10 +82,11 @@
    `maxPages = 1`)으로 다음 페이지 한 장만 새로 측정하고, 넘어가기 전 페이지를 방문 이력 스택에
    push. `previous()`는 그 스택을 pop(있으면 즉시·정확) — 스택이 비어 있을 때만(예: 검색 점프 직후)
    `Paginator.onePageEndingAt`으로 역산 추정
-3. **챕터 점프 모드가 켜져 있으면**(`ReaderSettings.chapterJumpEnabled`): `ChapterJumpNavigator`가
-   계산한 breakpoint 오프셋 목록 중 현재 위치 기준 다음/이전 지점을 골라 `jumpToPageAt(target)`으로
-   이동 — 방문 이력 스택 경로를 타지 않는다. 같은 지점을 다시 잡지 않도록 마지막으로 실제 이동한
-   목표 오프셋을 `lastChapterJumpOffset`에 따로 기억해둔다(9번 시나리오 참고).
+3. **챕터 점프 모드가 켜져 있으면**(`ReaderSettings.chapterJumpEnabled`): ⚠️ 여기서 경로가 완전히
+   갈립니다 — `ChapterJumpNavigator`가 계산한 breakpoint 오프셋 목록 중 현재 위치 기준 다음/이전
+   지점을 골라 `jumpToPageAt(target)`으로 이동하고, 위 2번의 방문 이력 스택은 아예 타지 않습니다.
+   같은 지점을 다시 잡지 않도록 마지막으로 실제 이동한 목표 오프셋을 `lastChapterJumpOffset`에
+   따로 기억해둡니다(9번 시나리오 참고). 테스트를 짤 때 이 두 경로를 헷갈리면 안 됩니다.
 4. 새 오프셋이 `currentOffset`에 반영 → `ReaderPagerContent`가 `AnimatedContent`로 전환 애니메이션
    렌더 → 오프셋 변경이 500ms 디바운스 로컬 저장(14번 시나리오)과 원격 동기화 체크포인트 타이머
    재시작(15번 시나리오)을 함께 트리거
@@ -94,9 +105,11 @@
 1. `ui/reader/ReaderTopBar.kt`의 검색 아이콘 탭 → `ui/reader/SearchSheet.kt` 열림,
    `ReaderViewModel`의 `lastSearchQuery`/`lastSearchResults`로 이전 검색 상태 복원(시트를 껐다 켜도
    유지)
-2. 검색어 입력 후 검색 버튼 또는 IME 검색 액션(타이핑만으로는 실행되지 않음) →
+2. 검색어 입력 후 검색 버튼 또는 IME 검색 액션 →
    `ReaderViewModel.search(query)` → `fullText`에 대소문자 무시 `indexOf` 반복(최대 200건) →
    `model/SearchResult.kt` 리스트 생성, 스니펫은 매칭 전후 20자
+   > ⚠️ 타이핑만으로는 실행되지 않습니다. 큰 소설에서 매 키 입력마다 `indexOf`를 돌리면 느려지고,
+   > 결과가 계속 바뀌면 오히려 헷갈려서 일부러 이렇게 뒀습니다.
 3. 결과 중 `currentOffset`과 가장 가까운 항목이 강조되고 그 근처로 자동 스크롤
 4. 결과 탭 → `ReaderViewModel.jumpToOffset(offset)` 호출 — `lastChapterJumpOffset`을 비우고, 페이지
    모드면 `jumpToPageAt(offset)`으로 해당 오프셋이 보이는 페이지를 계산(이력 스택은 이 점프 이후
@@ -149,11 +162,11 @@
    → `ReaderScreen`이 다음 컴포지션에서 `ReaderPagerContent` 대신 `ReaderScrollContent`를(또는
    반대로) 그림 — `currentOffset`은 그대로 유지되므로 같은 글자 위치에서 모드만 바뀜(4번/5번
    시나리오 참고)
-4. **줄바꿈 정리 모드 변경**(원문 유지 ↔ 문단 재구성): `setLineBreakMode(value)` 호출은 설정만
-   저장하고 끝 — 실제 재적용은 `ReaderViewModel.init`이 구독 중인 `settingsFlow.collect`에서
+4. **줄바꿈 정리 모드 변경**(원문 유지 ↔ 문단 재구성): ⚠️ `setLineBreakMode(value)` 호출은 설정만
+   저장하고 끝입니다. 실제 재적용은 `ReaderViewModel.init`이 구독 중인 `settingsFlow.collect`가
    이전 값과 다르다는 걸 감지해 `reflowParagraphs(mode)`(`TextReflower.reflow`를
-   `Dispatchers.Default`에서 재실행)를 호출하는 별도 경로로 일어남 — 즉 설정 변경과 재계산이
-   한 함수 호출로 안 묶여 있고 상태 흐름 관찰로 분리돼 있음
+   `Dispatchers.Default`에서 재실행)를 호출하는 별도 경로로 일어납니다 — 설정 변경과 재계산이 한
+   함수 호출로 안 묶여 있고 상태 흐름 관찰로 분리돼 있다는 걸 알아야 여기서 안 헤맵니다.
 5. **화면 꺼짐 방지 / 화면 방향 고정 토글**: `setKeepScreenOnEnabled(value)` / `setOrientationLock(value)`도
    설정만 저장하고, 실제 적용은 `ReaderScreen`의 `DisposableEffect(settings.keepScreenOnEnabled)` /
    `DisposableEffect(settings.orientationLock)`가 값 변화를 감지해 각각
@@ -183,9 +196,12 @@
    `flushPendingPosition()` 호출 → `BookRepository.updateReadPosition`으로 Room에 즉시 저장
 3. 뒤로가기 등으로 `ReaderViewModel`이 소멸(`onCleared`)하면 `viewModelScope`가 곧 취소되므로
    `runBlocking`으로 마지막 위치를 한 번 더 강제 저장
+   > ⚠️ `onCleared`에서만 쓰는 예외적인 패턴입니다. 평소처럼 `launch`를 쓰면 저장이 시작도 못 하고
+   > 스코프가 취소돼버려서 여기만 일부러 블로킹으로 처리합니다 — 다른 곳에서 따라 하면 메인 스레드를
+   > 막는 안티패턴이 됩니다.
 4. VSCode 동기화가 켜져 있으면 같은 시점에 `syncNowToRemote()`도 호출됨(15번 시나리오의 7번)
 
-## 15. VSCode 읽기 위치 동기화 (FEATURES.md §15, off by default)
+## 15. VSCode 읽기 위치 동기화 (FEATURES.md §15, 기본 꺼짐)
 
 **연결 테스트**
 
@@ -193,11 +209,12 @@
 2. `ReaderViewModel.testSupabaseConnection(secret)` → `data/sync/ReadingPositionSyncClient.kt`의
    `testConnection()`이 더미 경로로 upsert를 시도 → 2xx면 성공. 성공 시
    `ReaderSettingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)`로
-   시크릿과 검증 상태를 함께 커밋. **실패하면**(시크릿이 틀려 RLS가 401/403으로 거부, 네트워크 없음
-   등) `testConnection()`이 `false`를 돌려주고 `runCatching { ... }.getOrDefault(false)`라 예외로
-   튀지 않음 — 아무것도 저장되지 않아 `supabaseSharedSecret != supabaseVerifiedSecret` 상태 그대로
-   남고, 이후 3~7번 원격 조회/반영 경로는 `syncClientOrNull`이 매번 null을 돌려주며 전부 조용히
-   스킵됨(기능이 켜진 적이 없는 것과 동일하게 동작 — 로컬 읽기 흐름엔 영향 없음)
+   시크릿과 검증 상태를 함께 커밋.
+   > ⚠️ **실패하면**(시크릿이 틀려 RLS가 401/403으로 거부, 네트워크 없음 등) `testConnection()`이
+   > `false`를 돌려줄 뿐 예외로 튀지 않습니다(`runCatching { ... }.getOrDefault(false)`). 아무것도
+   > 저장되지 않아 `supabaseSharedSecret != supabaseVerifiedSecret` 상태 그대로 남고, 이후 3~7번의
+   > 원격 조회/반영 경로는 `syncClientOrNull`이 매번 null을 돌려주며 전부 조용히 스킵됩니다 —
+   > 기능이 켜진 적이 없는 것과 동일하게 동작해서 로컬 읽기 흐름엔 영향이 없습니다.
 
 **책을 열 때 / 화면 재진입 시 원격 조회**
 
@@ -216,7 +233,7 @@
 7. 화면을 벗어나는 시점(14번 시나리오)에는 타이머를 기다리지 않고 `syncNowToRemote()`가 즉시
    `pushRemoteSync`를 호출
 
-## 16. PC 파일 동기화 (FEATURES.md §16, off by default)
+## 16. PC 파일 동기화 (FEATURES.md §16, 기본 꺼짐)
 
 **PC 서버 준비 (PC 쪽, Go)**
 
@@ -230,17 +247,17 @@
 2. `ui/library/PcSyncSheet.kt`에서 "PC 찾기" 탭 → `LibraryViewModel.scanForPcSyncHosts()` →
    `data/sync/PcHostScanner.kt`의 `scanLocalSubnet()`이 로컬 `/24` 대역 254개 후보를 64개씩 병렬로
    `PcSyncClient.isPcSyncServer(candidate)`(신뢰 검증 없는 lenient TLS로 `/ping` 호출) 시도 → 응답
-   본문에 `"moonkata-sync-server"`가 있으면 후보로 채택. **아무것도 못 찾으면**(다른 서브넷, PC 서버
-   미실행, 방화벽 등) `scanLocalSubnet()`이 그냥 빈 리스트를 돌려줄 뿐 예외를 던지지 않음 — 호스트는
+   본문에 `"moonkata-sync-server"`가 있으면 후보로 채택. 아무것도 못 찾으면(다른 서브넷, PC 서버
+   미실행, 방화벽 등) `scanLocalSubnet()`이 그냥 빈 리스트를 돌려줄 뿐 예외를 던지지 않습니다 — 호스트는
    수동 입력으로 계속 진행 가능
 3. 호스트 + 시크릿 입력 후 "연결 테스트" → `LibraryViewModel.testPcSyncConnection` →
    `PcSyncClient(host, secret).testConnection()`이 lenient TLS로 `/list`를 호출(시크릿 헤더 포함) →
    성공하면 그 순간 받은 인증서 지문(`data/sync/PcTlsTrust.kt`의 `sha256Fingerprint`,
    `client.lastSeenFingerprint`)까지
    `ReaderSettingsRepository.updatePcSyncConnection(..., verified = true, fingerprint = ...)`로
-   함께 저장 — TOFU(trust-on-first-use) 방식. **실패하면**(호스트/시크릿 공백, PC 응답 없음, 시크릿
-   불일치로 401) `testPcSyncConnection`이 `false`만 돌려주고 아무것도 저장하지 않음 — "지금 동기화"는
-   아래 4번에서 검증 안 된 상태로 막힘
+   함께 저장 — TOFU(trust-on-first-use) 방식. 실패하면(호스트/시크릿 공백, PC 응답 없음, 시크릿
+   불일치로 401) `testPcSyncConnection`이 `false`만 돌려주고 아무것도 저장하지 않아, "지금 동기화"는
+   아래 4번에서 검증 안 된 상태로 막힙니다.
 
 **지금 동기화**
 
@@ -254,11 +271,15 @@
    `scanRecursively(treeUri)`로 로컬 SAF 트리 전체를 각각 조회
 7. `computeSyncDelta(remote, local)`(I/O 없는 순수 함수, `data/sync/RelativePath.kt`의
    `normalizeRelativePath`로 매칭 키 정규화)가 `toWrite`/`toDelete`를 계산 — 원격에만 있거나 크기가
-   다르면 `toWrite`, 로컬에만 있으면 `toDelete`(수정시각은 비교하지 않음)
-8. `toWrite`의 각 파일: 기존 로컬 파일이 있으면 `writeIntoExisting`(같은 `documentUri`를 유지한 채
-   내용만 덮어씀 — `BookEntity`가 그 URI로 읽기 위치를 참조하므로), 없으면
-   `writeNewFile`(`resolveOrCreateFolder`로 하위 폴더를 만든 뒤 새 문서 생성) — 둘 다
-   `client.downloadFile(relativePath, outputStream)`로 `/file?path=...` 응답을 그대로 스트리밍
+   다르면 `toWrite`, 로컬에만 있으면 `toDelete`.
+   > ⚠️ 수정시각은 비교하지 않고 크기만 봅니다. 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 돼
+   > PC 원본 시각을 못 물려받기 때문에, 수정시각을 비교에 넣으면 안 바뀐 파일도 매 동기화마다 다시
+   > 받아버리는 버그가 실제로 있었습니다.
+8. `toWrite`의 각 파일: ⚠️ 기존 로컬 파일이 있으면 `writeIntoExisting`으로 **같은 `documentUri`를
+   유지한 채 내용만 덮어씁니다** — 지우고 새로 만들면 `BookEntity`가 그 URI로 참조하던 읽기 위치
+   기록이 고아가 됩니다. 없으면 `writeNewFile`(`resolveOrCreateFolder`로 하위 폴더를 만든 뒤 새
+   문서 생성). 둘 다 `client.downloadFile(relativePath, outputStream)`로 `/file?path=...` 응답을
+   그대로 스트리밍
 9. `toDelete`의 각 파일: `DocumentFile.fromSingleUri(...).delete()`
 10. 진행 상황은 `PcSyncProgress`로 `LibraryViewModel.pcSyncState`에 실시간 반영 → `PcSyncSheet`가
     진행률로 표시 → 완료 시 `PcSyncResult`(받음/갱신/삭제/실패 건수)로 교체되고 `loadCurrent()`가
@@ -269,6 +290,6 @@
 - **원격 목록 조회 자체가 실패**(6번 단계, PC가 꺼졌거나 네트워크가 끊김): `listFilesRecursively()`가
   `null`을 돌려주고 `PcSyncFileManager.sync()`도 그대로 `null`을 리턴 → `syncFromPc()`가
   `pcSyncState.errorMessage`에 "PC에 연결할 수 없습니다"를 세팅하고 종료 — 이번엔 아무 파일도
-  건드리지 않음(부분 반영 없음)
+  건드리지 않습니다(부분 반영 없음).
 - **개별 파일 단위 실패**(7~9번 단계 도중 특정 파일만 다운로드/삭제 실패): 그 파일만
-  `PcSyncResult.failed`에 집계되고 나머지 파일은 계속 처리됨 — 동기화 전체가 중단되지 않음
+  `PcSyncResult.failed`에 집계되고 나머지 파일은 계속 처리됩니다 — 동기화 전체가 중단되지 않습니다.
