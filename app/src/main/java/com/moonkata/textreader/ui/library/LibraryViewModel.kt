@@ -224,13 +224,23 @@ class LibraryViewModel(
         viewModelScope.launch { settingsRepository.updatePcSyncConnection(host, secret, verified = false) }
     }
 
+    private var lastPcSyncTestError: String? = null
+
+    /** [PcSyncSheet]가 실패 문구에 그대로 보여준다 — VSCode 동기화 쪽과 같은 이유로 추가
+     * (.docs/SYNC_MULTIUSER_PLAN.md 참고). */
+    fun lastPcSyncTestError(): String? = lastPcSyncTestError
+
     /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. 이때 받은 PC
      * 인증서 지문도 같이 저장(TOFU) — 클라이언트를 pinnedFingerprint 없이(=아직 아무 인증서나 믿는
      * 상태로) 만들어서, 실제로 받은 인증서를 그 자리에서 "이 PC"로 등록하는 셈이다. */
     suspend fun testPcSyncConnection(host: String, secret: String): Boolean {
-        if (host.isBlank() || secret.isBlank()) return false
+        if (host.isBlank() || secret.isBlank()) {
+            lastPcSyncTestError = "주소 또는 시크릿이 비어있음"
+            return false
+        }
         val client = PcSyncClient(host, secret)
         val success = client.testConnection()
+        lastPcSyncTestError = if (success) null else client.lastTestConnectionError
         if (success) {
             settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = client.lastSeenFingerprint)
         }
@@ -248,9 +258,13 @@ class LibraryViewModel(
      * 인증서를 갖고 있다"까지 확인된 것이라 TOFU보다 신뢰 근거가 더 강하다.
      */
     suspend fun testPcSyncConnectionWithFingerprint(host: String, secret: String, fingerprint: String): Boolean {
-        if (host.isBlank() || secret.isBlank() || fingerprint.isBlank()) return false
+        if (host.isBlank() || secret.isBlank() || fingerprint.isBlank()) {
+            lastPcSyncTestError = "QR 페이로드에 빈 값이 있음"
+            return false
+        }
         val client = PcSyncClient(host, secret, fingerprint)
         val success = client.testConnection()
+        lastPcSyncTestError = if (success) null else client.lastTestConnectionError
         if (success) {
             settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = fingerprint)
         }

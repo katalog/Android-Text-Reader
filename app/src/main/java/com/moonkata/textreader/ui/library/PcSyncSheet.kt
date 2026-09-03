@@ -178,7 +178,7 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                         Text("연결됨", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
                     }
                     testFailed -> Text(
-                        "연결 실패 — 주소/시크릿을 확인하세요",
+                        "연결 실패 — ${viewModel.lastPcSyncTestError() ?: "주소/시크릿을 확인하세요"}",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
