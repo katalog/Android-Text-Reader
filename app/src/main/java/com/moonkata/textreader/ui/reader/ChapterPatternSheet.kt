@@ -44,10 +44,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.parser.ChapterPatternCatalog
+import com.moonkata.textreader.ui.SettingsController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChapterPatternSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onDismiss: () -> Unit) {
+fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
     var input by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }

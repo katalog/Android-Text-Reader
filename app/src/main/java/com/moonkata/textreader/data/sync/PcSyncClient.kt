@@ -41,14 +41,32 @@ class PcSyncClient(
     var lastSeenFingerprint: String? = null
         private set
 
+    /**
+     * [testConnection]이 실패했을 때 원인 — 예전엔 Log.w로만 남기고 화면엔 안 보여줘서 "네트워크가
+     * 안 닿는 건지/지문이 안 맞는 건지/시크릿이 틀린 건지" 구분할 방법이 없었다(VSCode 동기화 쪽에서
+     * 똑같은 문제를 겪고 고친 것과 같은 이유로 추가, .docs/SYNC_MULTIUSER_PLAN.md 참고).
+     */
+    var lastTestConnectionError: String? = null
+        private set
+
     /** 연결 테스트 — 시크릿이 맞는지 `/list` 호출로 확인(성공하면 시크릿도 맞다는 뜻), 이때 받은 인증서
      * 지문을 [lastSeenFingerprint]에 남긴다. */
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
+        lastTestConnectionError = null
         runCatching {
             val connection = openConnection("$baseUrl/list", requireSecret = true)
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val errorBody = runCatching { connection.errorStream?.bufferedReader()?.readText() }.getOrNull()
+                lastTestConnectionError = "HTTP $code" + (if (!errorBody.isNullOrBlank()) ": $errorBody" else "")
+                error("HTTP $code")
+            }
             connection.inputStream.use { it.readBytes() }
             recordFingerprint(connection)
-        }.onFailure { Log.w(TAG, "PC 서버 연결 테스트 실패", it) }.isSuccess
+        }.onFailure {
+            Log.w(TAG, "PC 서버 연결 테스트 실패", it)
+            if (lastTestConnectionError == null) lastTestConnectionError = "${it.javaClass.simpleName}: ${it.message}"
+        }.isSuccess
     }
 
     /** 원격 파일 목록 — 실패하면 null. */

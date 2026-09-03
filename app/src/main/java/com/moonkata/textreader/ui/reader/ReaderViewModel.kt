@@ -39,6 +39,7 @@ import com.moonkata.textreader.model.Paragraph
 import com.moonkata.textreader.model.SearchResult
 import com.moonkata.textreader.tts.AutoPageTurnController
 import com.moonkata.textreader.tts.TtsController
+import com.moonkata.textreader.ui.SettingsController
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -85,7 +86,7 @@ class ReaderViewModel(
     application: Application,
     private val bookId: Long,
     private val bookRepository: BookRepository,
-) : AndroidViewModel(application) {
+) : AndroidViewModel(application), SettingsController {
 
     val settingsRepository = ReaderSettingsRepository(application)
     private val fontDownloadManager = FontDownloadManager(application)
@@ -100,8 +101,22 @@ class ReaderViewModel(
     private var ttsPendingRange: Pair<Int, Int>? = null
     private val ttsChunkChars = 500
 
-    /** 같은 위치에서 이만큼(1분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고. */
-    private val remoteSyncIdleMs = 60_000L
+    /**
+     * 같은 위치에서 이만큼(5분) 안 움직이면 원격에도 체크포인트를 남긴다 — §원격 동기화 참고.
+     * 원래 1분이었는데, 사용자가 늘어날 걸 감안해 화면 이탈 시 즉시 반영 경로는 그대로 두고 이
+     * 간격만 늘려 원격 쓰기 빈도를 줄였다(SYNC_MULTIUSER_PLAN.md 스테이지 2).
+     */
+    private val remoteSyncIdleMs = 300_000L
+
+    /**
+     * 원격 조회(§checkRemoteAndMaybeNotify) 최소 간격 — 화면이 짧은 시간 안에 백그라운드↔포그라운드를
+     * 반복하면(예: 최근 앱 목록을 열었다 바로 닫기) ON_START가 그때마다 발생해 중복 조회가 나갈 수
+     * 있어, 마지막 조회 후 이 시간 안에는 다시 조회하지 않는다(SYNC_MULTIUSER_PLAN.md 스테이지 2).
+     */
+    private val remoteFetchCooldownMs = 30_000L
+
+    /** 마지막으로 원격 조회를 실제로 시도한 시각(ms) — §remoteFetchCooldownMs 참고. */
+    private var lastRemoteFetchAtMs = 0L
 
     /**
      * 원격이 이만큼(문자 수) 넘게 앞서 있을 때만 "더 읽으셨어요" 팝업을 띄운다 — VSCode 커서 오프셋과
@@ -198,6 +213,9 @@ class ReaderViewModel(
     private fun checkRemoteAndMaybeNotify(relativePath: String, localOffset: Int, settings: ReaderSettings) {
         if (relativePath.isEmpty()) return
         val client = syncClientOrNull(settings) ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastRemoteFetchAtMs < remoteFetchCooldownMs) return
+        lastRemoteFetchAtMs = now
         viewModelScope.launch {
             val remote = client.fetch(relativePath) ?: return@launch
             if (remote.charOffset - _uiState.value.currentOffset > minOffsetDiffToNotify) {
@@ -239,14 +257,22 @@ class ReaderViewModel(
         return ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, settings.supabaseSharedSecret)
     }
 
+    private var lastSupabaseTestError: String? = null
+
     /** 설정 화면 "연결 테스트" 버튼 — 성공하면 시크릿과 함께 검증 상태를 같이 커밋한다. */
-    suspend fun testSupabaseConnection(secret: String): Boolean {
-        if (secret.isBlank()) return false
+    override suspend fun testSupabaseConnection(secret: String): Boolean {
+        if (secret.isBlank()) {
+            lastSupabaseTestError = "시크릿이 비어있음"
+            return false
+        }
         val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
         val success = client.testConnection()
+        lastSupabaseTestError = if (success) null else client.lastTestConnectionError
         if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
         return success
     }
+
+    override fun lastSupabaseTestError(): String? = lastSupabaseTestError
 
     fun dismissExternalPositionPrompt() {
         _uiState.update { it.copy(externalFurtherOffset = null) }
@@ -404,7 +430,7 @@ class ReaderViewModel(
 
     // --- 원격(Supabase) 동기화 ---
     // 페이지/문단 이동마다 매번 올리면 낭비라, 아래 두 경로로만 원격에 반영한다:
-    // 1) 같은 위치에서 REMOTE_SYNC_IDLE_MS(1분) 이상 머무르면(체크포인트)
+    // 1) 같은 위치에서 remoteSyncIdleMs(5분) 이상 머무르면(체크포인트)
     // 2) 리더 화면을 벗어나는 시점(뒤로가기 → onCleared / 화면 꺼짐·홈·다른 앱 전환 → ON_STOP) 즉시
 
     private var remoteCheckpointJob: Job? = null
@@ -540,42 +566,42 @@ class ReaderViewModel(
         return results
     }
 
-    // --- 설정 setter ---
-    fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
-    fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
-    fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
-    fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
-    fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
-    fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
-    fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
-    fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
-    fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
-    fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
-    fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
-    fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
-    fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
-    fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
-    fun setChapterJumpEnabled(value: Boolean) {
+    // --- 설정 setter (SettingsController 구현) ---
+    override fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
+    override fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
+    override fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
+    override fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
+    override fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
+    override fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
+    override fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
+    override fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
+    override fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
+    override fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
+    override fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
+    override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
+    override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
+    override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
+    override fun setChapterJumpEnabled(value: Boolean) {
         lastChapterJumpOffset = null
         launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
     }
-    fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
-    fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
-    fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
-    fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
-    fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
-    fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
-    fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
+    override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
+    override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
+    override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
+    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
+    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+    override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
 
     // --- 챕터 인식 패턴 ---
-    fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
+    override fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
         val current = _uiState.value.settings.chapterPatternEnabledIds
         val updated = if (enabled) current + id else current - id
         settingsRepository.updateChapterPatternEnabledIds(updated)
     }
 
     /** 형식이 올바르지 않은 정규식이면 추가하지 않고 false를 반환한다. */
-    fun addCustomChapterPattern(pattern: String): Boolean {
+    override fun addCustomChapterPattern(pattern: String): Boolean {
         if (pattern.isBlank() || runCatching { Regex(pattern) }.isFailure) return false
         launchSetting {
             val current = _uiState.value.settings.chapterCustomPatterns
@@ -584,12 +610,12 @@ class ReaderViewModel(
         return true
     }
 
-    fun removeCustomChapterPattern(pattern: String) = launchSetting {
+    override fun removeCustomChapterPattern(pattern: String) = launchSetting {
         val current = _uiState.value.settings.chapterCustomPatterns
         settingsRepository.updateChapterCustomPatterns(current - pattern)
     }
 
-    fun setAutoAdvanceMode(mode: AutoAdvanceMode) {
+    override fun setAutoAdvanceMode(mode: AutoAdvanceMode) {
         if (mode == AutoAdvanceMode.TTS) {
             startTts()
         } else {
@@ -602,8 +628,8 @@ class ReaderViewModel(
     }
 
     // --- 폰트 다운로드 ---
-    fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
-    fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
+    override fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
+    override fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
 
     // --- TTS ---
     fun startTts() {

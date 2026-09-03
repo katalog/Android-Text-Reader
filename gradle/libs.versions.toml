@@ -16,6 +16,9 @@ juniversalchardet = "2.5.0"
 documentfile = "1.0.1"
 mockwebserver = "4.12.0"
 kotlinxCoroutinesTest = "1.8.1"
+camerax = "1.5.1"
+mlkitBarcodeScanning = "17.3.0"
+jsonJava = "20260814"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,6 +48,12 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcodeScanning" }
+json-java = { module = "org.json:json", version.ref = "jsonJava" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

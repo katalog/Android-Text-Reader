@@ -155,8 +155,11 @@ class PcSyncSheetTest {
         composeTestRule.onNodeWithText("공유 시크릿").performTextInput("whatever")
         composeTestRule.onNodeWithText("연결 테스트").performScrollTo().performClick()
 
+        // 실패 문구에 실제 원인(예외 종류/메시지)이 그대로 붙어서 나오게 바뀌어서(원인을 못 찾아
+        // 헤매던 실사용 버그를 겪은 뒤 추가, .docs/SYNC_MULTIUSER_PLAN.md 참고), 고정 문구 대신
+        // "연결 실패 —" 접두사만 확인한다 — 정확한 예외 메시지는 플랫폼/타이밍에 따라 달라질 수 있다.
         composeTestRule.waitUntil(timeoutMillis = 8_000) {
-            composeTestRule.onAllNodesWithText("연결 실패 — 주소/시크릿을 확인하세요")
+            composeTestRule.onAllNodesWithText("연결 실패 —", substring = true)
                 .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
         syncButton().performScrollTo().assertIsNotEnabled()

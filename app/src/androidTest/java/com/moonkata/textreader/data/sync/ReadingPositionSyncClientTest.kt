@@ -141,4 +141,30 @@ class ReadingPositionSyncClientTest {
 
         assertFalse(runBlocking { client.testConnection() })
     }
+
+    /**
+     * 실사용 중 GitHub 시크릿 SUPABASE_URL이 "https://xxx.supabase.co/rest/v1"로(끝에 /rest/v1까지
+     * 포함해서) 잘못 등록된 적이 있었다 — 클라이언트가 다시 "/rest/v1/reading_positions"를 이어붙여
+     * 경로가 겹쳐서(".../rest/v1/rest/v1/reading_positions") Supabase가 "PGRST125: invalid path"로
+     * 거부했다. baseUrl 끝에 공백/개행이 섞여도, "/rest/v1"이 중복으로 붙어있어도 실제 요청 경로는
+     * 항상 정확히 "/rest/v1/reading_positions" 하나여야 한다.
+     */
+    @Test
+    fun restBase_stripsDuplicateRestV1SuffixAndWhitespace_fromBaseUrl() {
+        val messyClient = ReadingPositionSyncClient(
+            baseUrl = server.url("/").toString().trimEnd('/') + "/rest/v1 \n",
+            publishableKey = "test-publishable-key",
+            sharedSecret = "test-shared-secret",
+        )
+        server.enqueue(MockResponse().setResponseCode(201))
+
+        assertTrue(runBlocking { messyClient.testConnection() })
+
+        val request = server.takeRequest()
+        assertTrue(
+            "경로가 정확히 /rest/v1/reading_positions 하나여야 함(중복/공백 없이): ${request.path}",
+            request.path?.startsWith("/rest/v1/reading_positions") == true,
+        )
+        assertFalse("‘/rest/v1’이 중복으로 남으면 안 됨: ${request.path}", request.path?.contains("v1/rest") == true)
+    }
 }

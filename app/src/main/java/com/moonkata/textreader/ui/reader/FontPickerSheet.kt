@@ -31,11 +31,12 @@ import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.font.FontCatalog
 import com.moonkata.textreader.data.font.FontCatalogEntry
 import com.moonkata.textreader.data.font.FontDownloadState
+import com.moonkata.textreader.ui.SettingsController
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FontPickerSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onDismiss: () -> Unit) {
+fun FontPickerSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text("폰트", style = MaterialTheme.typography.titleMedium)
@@ -56,7 +57,7 @@ fun FontPickerSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onDism
 }
 
 @Composable
-private fun FontEntryRow(viewModel: ReaderViewModel, settings: ReaderSettings, entry: FontCatalogEntry) {
+private fun FontEntryRow(viewModel: SettingsController, settings: ReaderSettings, entry: FontCatalogEntry) {
     var downloadState by remember(entry.id) {
         mutableStateOf<FontDownloadState>(
             if (viewModel.isFontDownloaded(entry)) FontDownloadState.Downloaded else FontDownloadState.NotDownloaded,

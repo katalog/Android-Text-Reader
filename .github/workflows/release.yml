@@ -3,7 +3,9 @@ name: Release
 # v로 시작하는 태그(v1.0, v1.2.3 등)를 push하면 실행된다: 유닛 테스트를 돌리고, 통과하면 릴리스
 # 키스토어(레포 시크릿에 base64로 저장)로 서명한 APK를 빌드해서 그 태그 이름으로 된 GitHub Release를
 # 만들고 APK를 첨부한다. RELEASE_KEYSTORE_BASE64 시크릿이 없으면 build.gradle.kts가 조용히 디버그
-# 서명으로 폴백한다(포크 등에서도 워크플로우 자체는 깨지지 않음).
+# 서명으로 폴백한다(포크 등에서도 워크플로우 자체는 깨지지 않음). SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY
+# 시크릿도 같은 이유로 없으면 빈 값으로 빌드되고, 그 경우 VSCode 동기화 기능만 조용히 비활성화된다
+# (SYNC_MULTIUSER_PLAN.md 스테이지 3).
 on:
   push:
     tags:
@@ -58,6 +60,8 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           RELEASE_VERSION_NAME: ${{ steps.version.outputs.name }}
           RELEASE_VERSION_CODE: ${{ steps.version.outputs.code }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: ./gradlew assembleRelease
 
       - name: Remove decoded keystore
@@ -75,3 +79,5 @@ jobs:
         with:
           files: release-artifacts/*.apk
           generate_release_notes: true
+          # 태그 이름에 -beta가 있으면(예: v1.5.0-beta.1) GitHub이 "Pre-release" 배지를 붙인다.
+          prerelease: ${{ contains(github.ref_name, '-beta') }}

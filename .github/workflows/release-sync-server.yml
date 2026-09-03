@@ -48,3 +48,5 @@ jobs:
         with:
           files: release-artifacts/*.exe
           generate_release_notes: true
+          # 태그 이름에 -beta가 있으면(예: sync-server-v1.5.0-beta.1) GitHub이 "Pre-release" 배지를 붙인다.
+          prerelease: ${{ contains(github.ref_name, '-beta') }}

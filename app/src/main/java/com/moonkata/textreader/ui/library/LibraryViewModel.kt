@@ -6,22 +6,35 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.moonkata.textreader.data.datastore.AutoAdvanceMode
+import com.moonkata.textreader.data.datastore.LineBreakMode
+import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageTransitionAnimation
+import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
+import com.moonkata.textreader.data.datastore.SwipeTurnMode
+import com.moonkata.textreader.data.datastore.ThemePreset
+import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
 import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.file.FolderBrowser
 import com.moonkata.textreader.data.file.SafFolderBrowser
+import com.moonkata.textreader.data.font.FontCatalogEntry
+import com.moonkata.textreader.data.font.FontDownloadManager
 import com.moonkata.textreader.data.repository.BookRepository
 import com.moonkata.textreader.data.sync.PcHostScanner
 import com.moonkata.textreader.data.sync.PcSyncClient
 import com.moonkata.textreader.data.sync.PcSyncFileManager
 import com.moonkata.textreader.data.sync.PcSyncProgress
 import com.moonkata.textreader.data.sync.PcSyncResult
+import com.moonkata.textreader.data.sync.ReadingPositionSyncClient
+import com.moonkata.textreader.data.sync.SupabaseConfig
 import com.moonkata.textreader.data.sync.normalizeRelativePath
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
+import com.moonkata.textreader.ui.SettingsController
 import com.moonkata.textreader.util.takePersistableReadPermission
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,7 +90,9 @@ class LibraryViewModel(
     private val bookRepository: BookRepository,
     private val settingsRepository: ReaderSettingsRepository,
     private val folderBrowser: FolderBrowser,
-) : AndroidViewModel(application) {
+) : AndroidViewModel(application), SettingsController {
+
+    private val fontDownloadManager = FontDownloadManager(application)
 
     private val _browseState = MutableStateFlow(BrowseState())
 
@@ -209,13 +224,23 @@ class LibraryViewModel(
         viewModelScope.launch { settingsRepository.updatePcSyncConnection(host, secret, verified = false) }
     }
 
+    private var lastPcSyncTestError: String? = null
+
+    /** [PcSyncSheet]가 실패 문구에 그대로 보여준다 — VSCode 동기화 쪽과 같은 이유로 추가
+     * (.docs/SYNC_MULTIUSER_PLAN.md 참고). */
+    fun lastPcSyncTestError(): String? = lastPcSyncTestError
+
     /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. 이때 받은 PC
      * 인증서 지문도 같이 저장(TOFU) — 클라이언트를 pinnedFingerprint 없이(=아직 아무 인증서나 믿는
      * 상태로) 만들어서, 실제로 받은 인증서를 그 자리에서 "이 PC"로 등록하는 셈이다. */
     suspend fun testPcSyncConnection(host: String, secret: String): Boolean {
-        if (host.isBlank() || secret.isBlank()) return false
+        if (host.isBlank() || secret.isBlank()) {
+            lastPcSyncTestError = "주소 또는 시크릿이 비어있음"
+            return false
+        }
         val client = PcSyncClient(host, secret)
         val success = client.testConnection()
+        lastPcSyncTestError = if (success) null else client.lastTestConnectionError
         if (success) {
             settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = client.lastSeenFingerprint)
         }
@@ -224,6 +249,27 @@ class LibraryViewModel(
 
     /** "PC 찾기" 버튼 — 로컬 서브넷에서 PC 트레이 서버를 찾아 IP 목록을 돌려준다. */
     suspend fun scanForPcSyncHosts(): List<String> = PcHostScanner(getApplication()).scanLocalSubnet()
+
+    /**
+     * QR 페어링(.docs/SYNC_MULTIUSER_PLAN.md 스테이지 6) 전용 — PC 트레이 서버의 `/pair` QR에는
+     * 호스트/시크릿뿐 아니라 인증서 지문도 이미 실려있다. 그래서 [testPcSyncConnection]처럼 먼저
+     * lenient TLS로 접속해 지문을 "그 자리에서 처음 본 값"으로 등록하는 TOFU 단계를 거칠 필요 없이,
+     * 처음부터 그 지문으로 pinned TLS 연결을 시도한다 — 성공하면 "QR이 알려준 서버가 실제로 그
+     * 인증서를 갖고 있다"까지 확인된 것이라 TOFU보다 신뢰 근거가 더 강하다.
+     */
+    suspend fun testPcSyncConnectionWithFingerprint(host: String, secret: String, fingerprint: String): Boolean {
+        if (host.isBlank() || secret.isBlank() || fingerprint.isBlank()) {
+            lastPcSyncTestError = "QR 페이로드에 빈 값이 있음"
+            return false
+        }
+        val client = PcSyncClient(host, secret, fingerprint)
+        val success = client.testConnection()
+        lastPcSyncTestError = if (success) null else client.lastTestConnectionError
+        if (success) {
+            settingsRepository.updatePcSyncConnection(host, secret, verified = true, fingerprint = fingerprint)
+        }
+        return success
+    }
 
     /**
      * "지금 동기화" 버튼 — 연결 테스트를 통과한 설정으로만 동작한다(Supabase 시크릿과 동일하게 "테스트
@@ -265,6 +311,77 @@ class LibraryViewModel(
             // 성공하면 지금 위치를 다시 읽어온다.
             if (result != null) loadCurrent()
         }
+    }
+
+    // --- SettingsController 구현 — 서재 화면에서도 QuickSettingsSheet를 그대로 재사용하기 위함.
+    // 열린 책이 없으니 값을 저장하는 것 이상의 부가 동작(ReaderViewModel의 TTS 즉시 시작, 방문 이력
+    // 초기화 등)은 하지 않는다 — 그건 나중에 실제로 책을 열었을 때 ReaderViewModel이 저장된 값을 읽어
+    // 알아서 적용한다. ---
+    override fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
+    override fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
+    override fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
+    override fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
+    override fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
+    override fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
+    override fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
+    override fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
+    override fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
+    override fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
+    override fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
+    override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
+    override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
+    override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
+    override fun setChapterJumpEnabled(value: Boolean) = launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
+    override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
+    override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
+    override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
+    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
+    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+    override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
+    override fun setAutoAdvanceMode(mode: AutoAdvanceMode) = launchSetting { settingsRepository.updateAutoAdvanceMode(mode) }
+
+    override fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
+        val current = uiState.value.settings.chapterPatternEnabledIds
+        val updated = if (enabled) current + id else current - id
+        settingsRepository.updateChapterPatternEnabledIds(updated)
+    }
+
+    override fun addCustomChapterPattern(pattern: String): Boolean {
+        if (pattern.isBlank() || runCatching { Regex(pattern) }.isFailure) return false
+        launchSetting {
+            val current = uiState.value.settings.chapterCustomPatterns
+            settingsRepository.updateChapterCustomPatterns(current + pattern)
+        }
+        return true
+    }
+
+    override fun removeCustomChapterPattern(pattern: String) = launchSetting {
+        val current = uiState.value.settings.chapterCustomPatterns
+        settingsRepository.updateChapterCustomPatterns(current - pattern)
+    }
+
+    override fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
+    override fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
+
+    private var lastSupabaseTestError: String? = null
+
+    override suspend fun testSupabaseConnection(secret: String): Boolean {
+        if (secret.isBlank()) {
+            lastSupabaseTestError = "시크릿이 비어있음"
+            return false
+        }
+        val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
+        val success = client.testConnection()
+        lastSupabaseTestError = if (success) null else client.lastTestConnectionError
+        if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
+        return success
+    }
+
+    override fun lastSupabaseTestError(): String? = lastSupabaseTestError
+
+    private fun launchSetting(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
     }
 
     private fun sortEntries(entries: List<FolderEntry>, option: FolderSortOption): List<FolderEntry> {
