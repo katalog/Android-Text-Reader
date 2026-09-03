@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.AlertDialog
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
+import com.moonkata.textreader.ui.reader.QuickSettingsSheet
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -69,6 +71,7 @@ fun LibraryScreen(
     val pickFolder = rememberFolderPickerLauncher(onFolderSelected = viewModel::onRootFolderSelected)
     var showSortMenu by remember { mutableStateOf(false) }
     var showPcSync by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.openBookEvents.collect { bookId -> onOpenBook(bookId) }
@@ -117,6 +120,9 @@ fun LibraryScreen(
                                     }
                                 }
                             }
+                            IconButton(onClick = { showSettings = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = "설정")
+                            }
                         }
                     },
                 )
@@ -164,6 +170,13 @@ fun LibraryScreen(
 
     if (showPcSync) {
         PcSyncSheet(viewModel = viewModel, settings = uiState.settings, onDismiss = { showPcSync = false })
+    }
+    if (showSettings) {
+        // 서재 화면엔 열린 책이 없어 ReaderViewModel을 만들 수 없다 — LibraryViewModel이
+        // SettingsController를 구현해서 같은 설정 시트를 여기서도 그대로 재사용한다(폰트/여백/테마/
+        // VSCode 동기화 등은 책과 무관한 앱 전역 설정이라 책을 열지 않고도 바꿀 수 있어야 한다는
+        // 실사용 피드백으로 추가).
+        QuickSettingsSheet(viewModel = viewModel, settings = uiState.settings, onDismiss = { showSettings = false })
     }
 }
 

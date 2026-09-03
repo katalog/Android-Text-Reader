@@ -53,12 +53,13 @@ import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
 import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.sync.QrPairingPayload
+import com.moonkata.textreader.ui.SettingsController
 import com.moonkata.textreader.ui.qr.QrScannerDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuickSettingsSheet(viewModel: ReaderViewModel, settings: ReaderSettings, onDismiss: () -> Unit) {
+fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showFontPicker by remember { mutableStateOf(false) }
     var showChapterPatterns by remember { mutableStateOf(false) }

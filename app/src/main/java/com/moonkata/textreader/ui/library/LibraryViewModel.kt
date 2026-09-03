@@ -6,22 +6,35 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.moonkata.textreader.data.datastore.AutoAdvanceMode
+import com.moonkata.textreader.data.datastore.LineBreakMode
+import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageTransitionAnimation
+import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
+import com.moonkata.textreader.data.datastore.SwipeTurnMode
+import com.moonkata.textreader.data.datastore.ThemePreset
+import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
 import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.file.FolderBrowser
 import com.moonkata.textreader.data.file.SafFolderBrowser
+import com.moonkata.textreader.data.font.FontCatalogEntry
+import com.moonkata.textreader.data.font.FontDownloadManager
 import com.moonkata.textreader.data.repository.BookRepository
 import com.moonkata.textreader.data.sync.PcHostScanner
 import com.moonkata.textreader.data.sync.PcSyncClient
 import com.moonkata.textreader.data.sync.PcSyncFileManager
 import com.moonkata.textreader.data.sync.PcSyncProgress
 import com.moonkata.textreader.data.sync.PcSyncResult
+import com.moonkata.textreader.data.sync.ReadingPositionSyncClient
+import com.moonkata.textreader.data.sync.SupabaseConfig
 import com.moonkata.textreader.data.sync.normalizeRelativePath
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
+import com.moonkata.textreader.ui.SettingsController
 import com.moonkata.textreader.util.takePersistableReadPermission
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,7 +90,9 @@ class LibraryViewModel(
     private val bookRepository: BookRepository,
     private val settingsRepository: ReaderSettingsRepository,
     private val folderBrowser: FolderBrowser,
-) : AndroidViewModel(application) {
+) : AndroidViewModel(application), SettingsController {
+
+    private val fontDownloadManager = FontDownloadManager(application)
 
     private val _browseState = MutableStateFlow(BrowseState())
 
@@ -282,6 +297,69 @@ class LibraryViewModel(
             // 성공하면 지금 위치를 다시 읽어온다.
             if (result != null) loadCurrent()
         }
+    }
+
+    // --- SettingsController 구현 — 서재 화면에서도 QuickSettingsSheet를 그대로 재사용하기 위함.
+    // 열린 책이 없으니 값을 저장하는 것 이상의 부가 동작(ReaderViewModel의 TTS 즉시 시작, 방문 이력
+    // 초기화 등)은 하지 않는다 — 그건 나중에 실제로 책을 열었을 때 ReaderViewModel이 저장된 값을 읽어
+    // 알아서 적용한다. ---
+    override fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
+    override fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
+    override fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
+    override fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
+    override fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
+    override fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
+    override fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
+    override fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
+    override fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
+    override fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
+    override fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
+    override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
+    override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
+    override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
+    override fun setChapterJumpEnabled(value: Boolean) = launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
+    override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
+    override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
+    override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
+    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
+    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+    override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
+    override fun setAutoAdvanceMode(mode: AutoAdvanceMode) = launchSetting { settingsRepository.updateAutoAdvanceMode(mode) }
+
+    override fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
+        val current = uiState.value.settings.chapterPatternEnabledIds
+        val updated = if (enabled) current + id else current - id
+        settingsRepository.updateChapterPatternEnabledIds(updated)
+    }
+
+    override fun addCustomChapterPattern(pattern: String): Boolean {
+        if (pattern.isBlank() || runCatching { Regex(pattern) }.isFailure) return false
+        launchSetting {
+            val current = uiState.value.settings.chapterCustomPatterns
+            settingsRepository.updateChapterCustomPatterns(current + pattern)
+        }
+        return true
+    }
+
+    override fun removeCustomChapterPattern(pattern: String) = launchSetting {
+        val current = uiState.value.settings.chapterCustomPatterns
+        settingsRepository.updateChapterCustomPatterns(current - pattern)
+    }
+
+    override fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
+    override fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
+
+    override suspend fun testSupabaseConnection(secret: String): Boolean {
+        if (secret.isBlank()) return false
+        val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
+        val success = client.testConnection()
+        if (success) settingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)
+        return success
+    }
+
+    private fun launchSetting(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
     }
 
     private fun sortEntries(entries: List<FolderEntry>, option: FolderSortOption): List<FolderEntry> {

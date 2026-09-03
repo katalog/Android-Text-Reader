@@ -39,6 +39,7 @@ import com.moonkata.textreader.model.Paragraph
 import com.moonkata.textreader.model.SearchResult
 import com.moonkata.textreader.tts.AutoPageTurnController
 import com.moonkata.textreader.tts.TtsController
+import com.moonkata.textreader.ui.SettingsController
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -85,7 +86,7 @@ class ReaderViewModel(
     application: Application,
     private val bookId: Long,
     private val bookRepository: BookRepository,
-) : AndroidViewModel(application) {
+) : AndroidViewModel(application), SettingsController {
 
     val settingsRepository = ReaderSettingsRepository(application)
     private val fontDownloadManager = FontDownloadManager(application)
@@ -257,7 +258,7 @@ class ReaderViewModel(
     }
 
     /** 설정 화면 "연결 테스트" 버튼 — 성공하면 시크릿과 함께 검증 상태를 같이 커밋한다. */
-    suspend fun testSupabaseConnection(secret: String): Boolean {
+    override suspend fun testSupabaseConnection(secret: String): Boolean {
         if (secret.isBlank()) return false
         val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)
         val success = client.testConnection()
@@ -557,42 +558,42 @@ class ReaderViewModel(
         return results
     }
 
-    // --- 설정 setter ---
-    fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
-    fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
-    fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
-    fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
-    fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
-    fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
-    fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
-    fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
-    fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
-    fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
-    fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
-    fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
-    fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
-    fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
-    fun setChapterJumpEnabled(value: Boolean) {
+    // --- 설정 setter (SettingsController 구현) ---
+    override fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
+    override fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
+    override fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
+    override fun setMarginHorizontalDp(value: Float) = launchSetting { settingsRepository.updateMarginHorizontalDp(value) }
+    override fun setMarginTopDp(value: Float) = launchSetting { settingsRepository.updateMarginTopDp(value) }
+    override fun setMarginBottomDp(value: Float) = launchSetting { settingsRepository.updateMarginBottomDp(value) }
+    override fun setThemePreset(value: ThemePreset) = launchSetting { settingsRepository.updateThemePreset(value) }
+    override fun setPageTurnMode(value: PageTurnMode) = launchSetting { settingsRepository.updatePageTurnMode(value) }
+    override fun setBrightnessOverrideEnabled(value: Boolean) = launchSetting { settingsRepository.updateBrightnessOverrideEnabled(value) }
+    override fun setBrightnessValue(value: Float) = launchSetting { settingsRepository.updateBrightnessValue(value) }
+    override fun setOrientationLock(value: OrientationLock) = launchSetting { settingsRepository.updateOrientationLock(value) }
+    override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
+    override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
+    override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
+    override fun setChapterJumpEnabled(value: Boolean) {
         lastChapterJumpOffset = null
         launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
     }
-    fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
-    fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
-    fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
-    fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
-    fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
-    fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
-    fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
+    override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
+    override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
+    override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
+    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
+    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
+    override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
 
     // --- 챕터 인식 패턴 ---
-    fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
+    override fun toggleChapterPattern(id: String, enabled: Boolean) = launchSetting {
         val current = _uiState.value.settings.chapterPatternEnabledIds
         val updated = if (enabled) current + id else current - id
         settingsRepository.updateChapterPatternEnabledIds(updated)
     }
 
     /** 형식이 올바르지 않은 정규식이면 추가하지 않고 false를 반환한다. */
-    fun addCustomChapterPattern(pattern: String): Boolean {
+    override fun addCustomChapterPattern(pattern: String): Boolean {
         if (pattern.isBlank() || runCatching { Regex(pattern) }.isFailure) return false
         launchSetting {
             val current = _uiState.value.settings.chapterCustomPatterns
@@ -601,12 +602,12 @@ class ReaderViewModel(
         return true
     }
 
-    fun removeCustomChapterPattern(pattern: String) = launchSetting {
+    override fun removeCustomChapterPattern(pattern: String) = launchSetting {
         val current = _uiState.value.settings.chapterCustomPatterns
         settingsRepository.updateChapterCustomPatterns(current - pattern)
     }
 
-    fun setAutoAdvanceMode(mode: AutoAdvanceMode) {
+    override fun setAutoAdvanceMode(mode: AutoAdvanceMode) {
         if (mode == AutoAdvanceMode.TTS) {
             startTts()
         } else {
@@ -619,8 +620,8 @@ class ReaderViewModel(
     }
 
     // --- 폰트 다운로드 ---
-    fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
-    fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
+    override fun downloadFont(entry: FontCatalogEntry) = fontDownloadManager.download(entry)
+    override fun isFontDownloaded(entry: FontCatalogEntry) = fontDownloadManager.isDownloaded(entry)
 
     // --- TTS ---
     fun startTts() {
