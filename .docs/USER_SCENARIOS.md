@@ -203,9 +203,19 @@
 
 ## 15. VSCode 읽기 위치 동기화 (FEATURES.md §15, 기본 꺼짐)
 
+**QR로 연결 (시크릿 수동 입력의 대안)**
+
+0. VSCode에서 `showPairingQr` 커맨드 실행(팔레트 또는 상태 표시줄) → 기존 시크릿이 있으면 재사용,
+   없으면 새로 생성해서 `{"type":"vscode_sync","secret":"..."}` QR을 웹뷰에 표시
+1. `QuickSettingsSheet`의 "QR로 연결" 탭 → `ui/qr/QrScannerDialog.kt`(CameraX + ML Kit)로 QR 스캔 →
+   `QrPairingPayload.parse`가 `VscodeSync(secret)`로 파싱 → 시크릿 입력칸에 자동 채움 → 아래 1번과
+   동일하게 바로 연결 테스트 진행. 파싱 실패(모르는 QR, 필드 누락)면 `null`을 돌려줄 뿐이라 스캐너가
+   계속 다음 프레임을 스캔하거나 사용자가 수동 입력으로 전환할 수 있습니다.
+
 **연결 테스트**
 
-1. `QuickSettingsSheet`의 "VSCode 읽기 위치 동기화" 영역에서 공유 시크릿 입력 → "연결 테스트" 탭
+1. `QuickSettingsSheet`의 "VSCode 읽기 위치 동기화" 영역에서 공유 시크릿 입력(또는 위 QR 스캔으로
+   자동 채움) → "연결 테스트" 탭
 2. `ReaderViewModel.testSupabaseConnection(secret)` → `data/sync/ReadingPositionSyncClient.kt`의
    `testConnection()`이 더미 경로로 upsert를 시도 → 2xx면 성공. 성공 시
    `ReaderSettingsRepository.updateSupabaseSharedSecret(secret, verifiedSecret = secret)`로
@@ -237,59 +247,92 @@
 
 **PC 서버 준비 (PC 쪽, Go)**
 
-1. 사용자가 `moonkata-sync-server.exe` 실행 → `main.go`가 설정 로드/시크릿 생성(`config.go`) →
-   `tls.go`의 `loadOrCreateTLSCertificate`가 자체 서명 인증서 준비 → HTTPS 리스너를 `:58221`에
-   기동(`server.go`) → `tray.go`가 트레이 아이콘과 "실행 중" 알림(공유 폴더 + 시크릿, 클립보드에도
-   복사)을 표시
+1. 사용자가 `moonkata-sync-server.exe` 실행 → 먼저 `single_instance_windows.go`가 이름 있는 뮤텍스로
+   이미 실행 중인 인스턴스가 있는지 확인(있으면 알림만 띄우고 조용히 종료) → `main.go`가 설정 로드/
+   시크릿 생성(`config.go`) → `tls.go`의 `loadOrCreateTLSCertificate`가 자체 서명 인증서 준비 →
+   HTTPS 리스너를 `:58221`에 기동(`server.go`, `/pair` 포함) → `tray.go`가 트레이 아이콘과 "실행 중"
+   알림(공유 폴더 + 시크릿, 클립보드에도 복사)을 표시. 모든 트레이 알림은 `showNotification`(Windows
+   우측 하단 토스트)이라 확인을 누르지 않아도 서버는 계속 응답합니다 — 예전 `MessageBox` 모달처럼
+   프로그램이 멈춘 것처럼 보이지 않습니다.
 
-**PC 찾기 · 연결 테스트 (안드로이드 쪽)**
+**QR로 연결 (호스트 찾기 + 시크릿 입력의 대안)**
 
-2. `ui/library/PcSyncSheet.kt`에서 "PC 찾기" 탭 → `LibraryViewModel.scanForPcSyncHosts()` →
+2. PC 트레이 메뉴 "동기화 QR 보기" → `handleShowPairingQr`가 기본 브라우저로
+   `https://127.0.0.1:{port}/pair`를 엶 → `pair.go`의 `handlePair`가 `localLanIP()`로 LAN IP를 추정하고
+   호스트+시크릿+인증서 지문을 담은 `{"type":"pc_sync","host":...,"secret":...,"fingerprint":...}` QR
+   PNG를 즉석에서 생성해 보여줌(이 엔드포인트는 인증 불필요 — QR 자체가 곧 인증 정보라서)
+3. 안드로이드 `PcSyncSheet`의 "QR로 연결" 탭 → 같은 `QrScannerDialog`로 스캔 →
+   `QrPairingPayload.PcSync`로 파싱 → 호스트/시크릿/지문을 한 번에 채우고, 지문까지 이미 받았으므로
+   lenient TLS로 먼저 찔러보는 TOFU 단계 없이 곧바로 지문 고정(pinned) TLS로 연결 테스트를 진행
+
+**PC 찾기 · 연결 테스트 (수동 경로, 안드로이드 쪽)**
+
+4. `ui/library/PcSyncSheet.kt`에서 "PC 찾기" 탭 → `LibraryViewModel.scanForPcSyncHosts()` →
    `data/sync/PcHostScanner.kt`의 `scanLocalSubnet()`이 로컬 `/24` 대역 254개 후보를 64개씩 병렬로
    `PcSyncClient.isPcSyncServer(candidate)`(신뢰 검증 없는 lenient TLS로 `/ping` 호출) 시도 → 응답
    본문에 `"moonkata-sync-server"`가 있으면 후보로 채택. 아무것도 못 찾으면(다른 서브넷, PC 서버
    미실행, 방화벽 등) `scanLocalSubnet()`이 그냥 빈 리스트를 돌려줄 뿐 예외를 던지지 않습니다 — 호스트는
    수동 입력으로 계속 진행 가능
-3. 호스트 + 시크릿 입력 후 "연결 테스트" → `LibraryViewModel.testPcSyncConnection` →
+5. 호스트 + 시크릿 입력 후 "연결 테스트" → `LibraryViewModel.testPcSyncConnection` →
    `PcSyncClient(host, secret).testConnection()`이 lenient TLS로 `/list`를 호출(시크릿 헤더 포함) →
    성공하면 그 순간 받은 인증서 지문(`data/sync/PcTlsTrust.kt`의 `sha256Fingerprint`,
    `client.lastSeenFingerprint`)까지
    `ReaderSettingsRepository.updatePcSyncConnection(..., verified = true, fingerprint = ...)`로
    함께 저장 — TOFU(trust-on-first-use) 방식. 실패하면(호스트/시크릿 공백, PC 응답 없음, 시크릿
    불일치로 401) `testPcSyncConnection`이 `false`만 돌려주고 아무것도 저장하지 않아, "지금 동기화"는
-   아래 4번에서 검증 안 된 상태로 막힙니다.
+   아래 6번에서 검증 안 된 상태로 막힙니다. (QR 경로에서는 3번이 이미 이 저장까지 끝내므로 5번을
+   건너뜁니다.)
 
 **지금 동기화**
 
-4. "지금 동기화" 탭 → `LibraryViewModel.syncFromPc()` — 먼저 라이브러리 폴더가 선택돼 있는지
+6. "지금 동기화" 탭 → `LibraryViewModel.syncFromPc()` — 먼저 라이브러리 폴더가 선택돼 있는지
    확인(없으면 `pcSyncState.errorMessage`에 "먼저 라이브러리 폴더를 선택하세요"로 즉시 중단), 그 다음
    호스트/시크릿이 마지막 연결 테스트 성공 값과 정확히 같은지 재확인(하나라도 다르면 "먼저 연결
    테스트를 통과해야 합니다"로 중단 — 예를 들어 연결 테스트 이후 시크릿 입력칸만 다시 고친 경우)
-5. `PcSyncClient(host, secret, pinnedFingerprint)`(이번엔 지문 고정 TLS)를 생성 →
+7. `PcSyncClient(host, secret, pinnedFingerprint)`(이번엔 지문 고정 TLS)를 생성 →
    `data/sync/PcSyncFileManager.kt`의 `sync(treeUri)` 호출
-6. `client.listFilesRecursively()`로 원격 파일 목록(`/list`), `data/sync/LocalLibraryScanner.kt`의
+8. `client.listFilesRecursively()`로 원격 파일 목록(`/list`), `data/sync/LocalLibraryScanner.kt`의
    `scanRecursively(treeUri)`로 로컬 SAF 트리 전체를 각각 조회
-7. `computeSyncDelta(remote, local)`(I/O 없는 순수 함수, `data/sync/RelativePath.kt`의
+9. `computeSyncDelta(remote, local)`(I/O 없는 순수 함수, `data/sync/RelativePath.kt`의
    `normalizeRelativePath`로 매칭 키 정규화)가 `toWrite`/`toDelete`를 계산 — 원격에만 있거나 크기가
    다르면 `toWrite`, 로컬에만 있으면 `toDelete`.
    > ⚠️ 수정시각은 비교하지 않고 크기만 봅니다. 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 돼
    > PC 원본 시각을 못 물려받기 때문에, 수정시각을 비교에 넣으면 안 바뀐 파일도 매 동기화마다 다시
    > 받아버리는 버그가 실제로 있었습니다.
-8. `toWrite`의 각 파일: ⚠️ 기존 로컬 파일이 있으면 `writeIntoExisting`으로 **같은 `documentUri`를
+10. `toWrite`의 각 파일: ⚠️ 기존 로컬 파일이 있으면 `writeIntoExisting`으로 **같은 `documentUri`를
    유지한 채 내용만 덮어씁니다** — 지우고 새로 만들면 `BookEntity`가 그 URI로 참조하던 읽기 위치
    기록이 고아가 됩니다. 없으면 `writeNewFile`(`resolveOrCreateFolder`로 하위 폴더를 만든 뒤 새
    문서 생성). 둘 다 `client.downloadFile(relativePath, outputStream)`로 `/file?path=...` 응답을
    그대로 스트리밍
-9. `toDelete`의 각 파일: `DocumentFile.fromSingleUri(...).delete()`
-10. 진행 상황은 `PcSyncProgress`로 `LibraryViewModel.pcSyncState`에 실시간 반영 → `PcSyncSheet`가
+11. `toDelete`의 각 파일: `DocumentFile.fromSingleUri(...).delete()`
+12. 진행 상황은 `PcSyncProgress`로 `LibraryViewModel.pcSyncState`에 실시간 반영 → `PcSyncSheet`가
     진행률로 표시 → 완료 시 `PcSyncResult`(받음/갱신/삭제/실패 건수)로 교체되고 `loadCurrent()`가
     서재 목록을 새로고침
 
 **실패 두 종류**
 
-- **원격 목록 조회 자체가 실패**(6번 단계, PC가 꺼졌거나 네트워크가 끊김): `listFilesRecursively()`가
+- **원격 목록 조회 자체가 실패**(8번 단계, PC가 꺼졌거나 네트워크가 끊김): `listFilesRecursively()`가
   `null`을 돌려주고 `PcSyncFileManager.sync()`도 그대로 `null`을 리턴 → `syncFromPc()`가
   `pcSyncState.errorMessage`에 "PC에 연결할 수 없습니다"를 세팅하고 종료 — 이번엔 아무 파일도
   건드리지 않습니다(부분 반영 없음).
-- **개별 파일 단위 실패**(7~9번 단계 도중 특정 파일만 다운로드/삭제 실패): 그 파일만
+- **개별 파일 단위 실패**(9~11번 단계 도중 특정 파일만 다운로드/삭제 실패): 그 파일만
   `PcSyncResult.failed`에 집계되고 나머지 파일은 계속 처리됩니다 — 동기화 전체가 중단되지 않습니다.
+
+---
+
+## 17. 서재 화면에서 바로 설정 열기 (FEATURES.md §1, §12)
+
+**무엇이 달라졌나**: 예전엔 앱 설정(퀵설정/폰트/챕터패턴)을 리더 화면에서만 열 수 있어서, 책을 한
+권도 안 연 상태에서는 접근할 방법이 없었습니다. 지금은 서재 화면 상단 바 오른쪽에 PC 동기화(§16)·
+정렬·설정 아이콘 3개가 있어 책을 열지 않고도 곧장 열립니다.
+
+1. 서재 상단 바의 설정 아이콘 탭 → `LibraryScreen.kt`가 `QuickSettingsSheet`를 띄우되, 이번엔
+   `SettingsController` 구현으로 `ReaderViewModel`이 아니라 `LibraryViewModel`을 넘김
+2. 시트 안에서 값을 바꾸면(예: 폰트 크기) `LibraryViewModel`의 `SettingsController` 구현이
+   `ReaderSettingsRepository`에 바로 저장만 합니다 — `ReaderViewModel` 구현과 달리 재페이지네이션
+   같은 세션 중 부수효과를 트리거할 게 없습니다(리더가 열려 있지 않으므로).
+3. 정렬 아이콘 → `LibraryViewModel.setSortOption`으로 즉시 반영, PC 동기화 아이콘 → 16번 시나리오의
+   `PcSyncSheet` 진입점과 동일한 흐름으로 이어집니다.
+
+> `LibraryScreenSettingsAccessTest`가 이 경로로 연 시트에서 바꾼 값이 실제로 DataStore에 저장되는지
+> 검증합니다.

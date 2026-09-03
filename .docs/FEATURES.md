@@ -22,10 +22,12 @@ library  →  reader/{bookId}
 `BookDao`/`AppDatabase`)에 저장합니다.
 
 앱 자체는 완전 오프라인으로 동작하지만, 기기 간 동기화 두 가지(둘 다 기본 꺼짐, 사용자가 시크릿을 직접
-입력해야 켜짐)가 `data/sync/`에 있습니다 — VSCode와 읽기 위치를 공유하는 §15, PC와 책 파일 자체를
-동기화하는 §16. §15는 지금 **개인 Supabase 프로젝트를 모든 설치본이 공유**하는 구조라, 사용자가 늘면
-요금 문제가 생길 수 있다는 게 알려진 리스크입니다 — 자세한 배경은 각각
-[`VSCODE_SYNC_PLAN.md`](VSCODE_SYNC_PLAN.md), [`PC_SYNC_SERVER_PLAN.md`](PC_SYNC_SERVER_PLAN.md).
+입력하거나 QR을 스캔해야 켜짐)가 `data/sync/`에 있습니다 — VSCode와 읽기 위치를 공유하는 §15, PC와
+책 파일 자체를 동기화하는 §16. 둘 다 개인 Supabase 프로젝트(§15) 또는 사용자 PC(§16)를 매개로 하되,
+Supabase 쪽은 공유 시크릿의 SHA-256 해시를 `user_key`로 써서 설치본마다 자기 행만 보이게 서버 RLS로
+분리해뒀습니다(요금 폭주 리스크였던 "모든 설치본이 한 파티션 공유" 문제의 해결책) — 자세한 배경은
+각각 [`VSCODE_SYNC_PLAN.md`](VSCODE_SYNC_PLAN.md), [`PC_SYNC_SERVER_PLAN.md`](PC_SYNC_SERVER_PLAN.md),
+멀티유저 전환 과정 전체는 [`SYNC_MULTIUSER_PLAN.md`](SYNC_MULTIUSER_PLAN.md).
 
 > **여기서 자주 헷갈리는 것 4가지**
 > 1. **저장되는 위치는 페이지 번호가 아니라 글자 번호입니다** — §4. 페이지 번호 필드를 아무리 찾아도
@@ -44,7 +46,8 @@ library  →  reader/{bookId}
 **무엇을 하나**
 시스템 폴더 선택기(SAF)로 루트 폴더를 고르면 그 안을 **한 단계씩** 탭해서 들어갑니다. 전체 트리를
 재귀 스캔하지 않습니다. `.txt`와 `.zip`만 보이고, zip은 폴더처럼 들어가 그 안의 `.txt`를 엽니다.
-이름/날짜/크기 정렬과 파일별 읽기 진행률 표시가 있습니다.
+이름/날짜/크기 정렬과 파일별 읽기 진행률 표시가 있습니다. 상단 바 오른쪽엔 PC 동기화(§16)·정렬·설정
+아이콘 3개가 있어, 책을 열지 않고도 서재 화면에서 바로 접근할 수 있습니다.
 
 **파일**
 
@@ -58,6 +61,7 @@ library  →  reader/{bookId}
 | 영구 읽기 권한 | `util/SafUriExt.kt` (`takePersistableReadPermission`) |
 | 마지막 폴더 URI·정렬 저장 | `data/datastore/ReaderSettingsRepository.kt` |
 | 책 레코드 생성 | `data/repository/BookRepository.kt` (`findOrCreateBook`) |
+| 상단 바에서 퀵설정/폰트/챕터패턴 시트를 열기 위한 공통 인터페이스 | `ui/SettingsController.kt` |
 
 **구현 요약**
 
@@ -359,6 +363,11 @@ library  →  reader/{bookId}
 
 커스텀 테마 색(`CUSTOM` + ARGB)은 모델·저장소에 있으나, 퀵설정 칩은 라이트/다크/세피아만 노출합니다.
 
+> **`QuickSettingsSheet`/`FontPickerSheet`/`ChapterPatternSheet`는 리더뿐 아니라 서재 화면에서도
+> 열립니다.** 둘 다 `SettingsController`(`ui/SettingsController.kt`) 인터페이스 하나만 받으므로, 시트
+> 코드는 자신이 리더에서 열렸는지 서재에서 열렸는지 모릅니다. `ReaderViewModel`은 세션 중 부수효과(재
+> 페이지네이션 등)까지 처리하도록, `LibraryViewModel`은 값을 저장만 하도록 각자 구현합니다.
+
 > **여기 새 설정 하나 추가하려면**: 네 군데를 순서대로 고쳐야 합니다. 레시피는
 > [ONBOARDING.md](ONBOARDING.md) §5에 있고, 저장 키 이름을 나중에 바꾸면 안 된다는 경고도 거기
 > 있습니다.
@@ -430,13 +439,16 @@ OFL 한글 폰트 카탈로그에서 골라 앱 내부 저장소에 받고, Comp
 **무엇을 하나**
 같은 책을 PC(VSCode 확장)와 안드로이드 양쪽에서 읽을 때, "더 멀리 읽은 위치"를 공유 Supabase
 프로젝트를 매개로 맞춰줍니다. 로그인·계정 개념 없이 사용자가 직접 만든 공유 시크릿 문자열 하나로
-인증합니다. 실패해도(네트워크 없음, 시크릿 미검증 등) 로컬 읽기·저장 흐름에는 전혀 영향이 없는
-best-effort 기능입니다.
+인증하고, 그 시크릿을 양쪽에 입력하는 방법은 직접 타이핑/붙여넣기 또는 **QR 스캔** 둘 다 됩니다.
+실패해도(네트워크 없음, 시크릿 미검증 등) 로컬 읽기·저장 흐름에는 전혀 영향이 없는 best-effort
+기능입니다.
 
-> **⚠️ 지금 이 방식은 모든 설치본이 개발자 개인 Supabase 프로젝트 하나를 공유합니다.** URL/키가
-> 소스에 고정값으로 박혀 있어서(`SupabaseConfig.kt`) 그렇습니다. 사용자가 늘면 무료 티어 요청/대역폭
-> 한도를 다 같이 갉아먹습니다 — 앱이 공개 배포되기 전에 §16처럼 자기 PC를 서버로 쓰는 방식으로
-> 옮기는 게 근본적인 해결책으로 논의 중입니다.
+> **개발자 개인 Supabase 프로젝트 하나를 모든 설치본이 공유하지만, 이제 설치본끼리 서로의 데이터를
+> 못 봅니다.** URL/키는 여전히 소스에 고정값으로 박혀 있지만(`SupabaseConfig.kt`), 공유 시크릿의
+> SHA-256 해시가 `user_key`가 돼 서버 트리거가 자동 계산하고 RLS가 그 값으로 행을 격리합니다 — 클라
+> 이언트 코드 변경 없이 서버(Postgres) 쪽 스키마·정책만으로 해결했습니다. 요청 자체는 여전히 모든
+> 설치본이 같은 무료 티어 한도를 나눠 쓰므로 사용자가 아주 많이 늘면 그건 별개 문제로 남습니다 — 배경은
+> [`SYNC_MULTIUSER_PLAN.md`](SYNC_MULTIUSER_PLAN.md).
 
 **파일**
 
@@ -447,8 +459,11 @@ best-effort 기능입니다.
 | 매칭 키(상대경로) 정규화 + SAF documentId 역산 폴백 | `data/sync/RelativePath.kt` |
 | 조회·체크포인트·팝업 트리거 | `ui/reader/ReaderViewModel.kt` (`checkRemoteAndMaybeNotify`, `scheduleRemoteSyncCheckpoint`, `syncNowToRemote`, `onReaderResumed`) |
 | "더 멀리 읽었습니다" 팝업 UI | `ui/reader/ReaderScreen.kt` (`externalFurtherOffset` 다이얼로그) |
-| 시크릿 입력·연결 테스트 UI | `ui/reader/QuickSettingsSheet.kt` |
+| 시크릿 수동 입력·연결 테스트 UI | `ui/reader/QuickSettingsSheet.kt` |
+| QR 페이로드 파싱(`{"type":"vscode_sync","secret":"..."}`) | `data/sync/QrPairingPayload.kt` (`VscodeSync`) |
+| 카메라로 QR 스캔(CameraX + ML Kit Barcode Scanning) | `ui/qr/QrScannerDialog.kt` |
 | 시크릿/검증 상태 저장 | `data/datastore/ReaderSettings.kt`, `ReaderSettingsRepository.kt` |
+| VSCode 쪽 QR 표시(SVG, `qrcode` 패키지) | `vscode-moonkata-reader-sync` 저장소 `src/pairingQr.ts` (`showPairingQr` 커맨드) |
 
 **구현 요약**
 
@@ -472,6 +487,11 @@ best-effort 기능입니다.
    > 차이로도 팝업이 계속 떴습니다.
 4. 원격에 쓰는 건 같은 위치에서 1분 이상 머무를 때(체크포인트)와 화면을 벗어나는 시점뿐입니다 —
    같은 오프셋을 반복해서 안 올리도록 마지막으로 반영한 오프셋을 기억해둡니다.
+5. VSCode에서 `showPairingQr` 커맨드를 실행하면(기존 시크릿이 있으면 재사용, 없으면 새로 생성) 그
+   시크릿을 담은 `{"type":"vscode_sync","secret":"..."}` QR을 보여줍니다. 안드로이드 퀵설정의
+   "QR로 연결"이 `QrScannerDialog`로 그걸 스캔해 `QrPairingPayload.parse`로 파싱, 시크릿 입력칸에
+   자동으로 채우고 바로 연결 테스트까지 진행합니다 — 타이핑 실수 여지를 없앤 것뿐, 검증 로직 자체는
+   수동 입력 경로와 동일합니다.
 
 ---
 
@@ -495,20 +515,24 @@ Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더�
 | 동기화 설정 draft·연결 테스트·"지금 동기화" 트리거 | `ui/library/LibraryViewModel.kt` (`testPcSyncConnection`, `scanForPcSyncHosts`, `syncFromPc`, `pcSyncState`) |
 | 설정 UI | `ui/library/PcSyncSheet.kt` |
 | 호스트/시크릿/검증 상태/지문 저장 | `data/datastore/ReaderSettings.kt`, `ReaderSettingsRepository.kt` |
+| QR 페이로드 파싱(`{"type":"pc_sync","host":...,"secret":...,"fingerprint":...}`) | `data/sync/QrPairingPayload.kt` (`PcSync`) |
+| 카메라로 QR 스캔(§15와 공유) | `ui/qr/QrScannerDialog.kt` |
 
 **파일 — PC 쪽 (Go, `external_library/sync_server`)**
 
 | 역할 | 파일 |
 |---|---|
-| 진입점, HTTPS 서버 기동 | `main.go` |
-| HTTP 라우팅(`/ping`, `/list`, `/file`) + 시크릿 검사 | `server.go` |
+| 진입점, HTTPS 서버 기동, 중복 실행 방지 | `main.go` |
+| HTTP 라우팅(`/ping`, `/list`, `/file`, `/pair`) + 시크릿 검사 | `server.go` |
 | 폴더 재귀 스캔 + 경로 탈출 방지 | `filelist.go` |
 | 설정 파일(`%APPDATA%\MoonkataSyncServer\config.json`) | `config.go` |
 | 트레이 메뉴 변경이 재시작 없이 반영되게 하는 공유 상태 | `state.go` |
 | 자체 서명 인증서 생성·재사용 | `tls.go` |
-| 시스템 트레이 UI(폴더 변경/시크릿 복사·재생성/자동실행) | `tray.go` |
-| 네이티브 다이얼로그(MessageBox/폴더선택/클립보드) | `dialog_windows.go` |
+| 시스템 트레이 UI(폴더 변경/QR 보기/시크릿 복사·재생성/자동실행) | `tray.go` |
+| `/pair` 페이지 — 로컬 LAN IP 추정 + QR PNG 생성(호스트/시크릿/지문 포함) | `pair.go` |
+| 네이티브 알림·폴더선택·클립보드(Windows 토스트, MessageBox 아님) | `dialog_windows.go` |
 | Windows 시작 프로그램 등록(`HKCU ... Run`) | `autostart_windows.go` |
+| 이름 있는 뮤텍스로 중복 실행 방지 | `single_instance_windows.go` |
 
 **구현 요약**
 
@@ -529,6 +553,26 @@ Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더�
    `BookEntity`가 그 URI로 참조하던 읽기 위치 기록이 고아가 됩니다.
 5. PC 서버의 폴더/시크릿은 `AppState`(뮤텍스로 보호된 공유 상태)를 통해 매 요청마다 읽으므로,
    트레이 메뉴에서 폴더를 바꾸거나 시크릿을 재생성해도 HTTP 리스너를 재시작할 필요가 없습니다.
+6. 트레이 메뉴 "동기화 QR 보기"는 기본 브라우저로 `https://127.0.0.1:{port}/pair`를 엽니다. 이
+   엔드포인트는 인증 없이 응답합니다 — QR 자체에 시크릿이 담겨 있어서, `/list`·`/file`처럼 시크릿을
+   요구하면 "QR을 보려고 시크릿이 먼저 필요"한 모순이 생기기 때문입니다. QR에는 호스트(§ 아래 참고)·
+   시크릿·인증서 지문이 한 번에 담겨서, 안드로이드가 스캔만 하면 "PC 찾기"(서브넷 스캔)와 수동 시크릿
+   입력을 모두 건너뛰고 지문도 QR로 미리 받아 lenient TLS 단계 없이 바로 `createPinnedSslContext`로
+   연결을 시작합니다.
+   > **⚠️ QR의 `host` 필드는 포트 없이 IP만 담습니다.** `PcSyncClient`가 고정 포트(58221)를 스스로
+   > 붙이는 구조라, 한때 `pair.go`가 포트까지 같이 보내 "IP:포트:포트"로 겹치는 실제 버그가 있었습니다
+   > (`MalformedURLException`, 실사용 중 발견 → `pair_test.go`에 회귀 테스트 추가).
+   > **⚠️ `localLanIP()`는 인터페이스를 그냥 순서대로 훑지 않습니다.** VPN/가상 어댑터나 DHCP 실패로
+   > 생긴 링크-로컬 주소(`169.254.x.x`)를 먼저 집어 QR에 잘못된 주소가 실리는 문제가 실사용 중
+   > 있었습니다 — 대신 UDP 소켓으로 실제 아웃바운드 라우팅을 물어보는 표준 트릭(`outboundIP`)을 우선
+   > 쓰고, 완전 오프라인일 때만 링크-로컬을 걸러낸 인터페이스 목록으로 폴백합니다.
+7. **모든 트레이 알림은 논블로킹입니다.** 원래 Win32 `MessageBoxW` 기반 모달로 시작/폴더변경/시크릿
+   복사 등을 알렸는데, 사용자가 PC 앞에 없을 때 확인을 누를 때까지 서버가 멈춰있는 것처럼 보이는
+   문제가 실사용 피드백으로 나와서 전부 `showNotification`(PowerShell로 띄우는 WinForms
+   `NotifyIcon.ShowBalloonTip`, 별도 프로세스를 기다리지 않고 즉시 리턴)으로 교체했습니다 —
+   `dialog_windows.go`에 `MessageBoxW` 코드는 더 이상 없습니다.
+8. exe를 두 번 실행해도 서버/트레이 아이콘이 중복 기동되지 않도록 `single_instance_windows.go`가
+   이름 있는 Windows 뮤텍스로 두 번째 실행을 감지해 조용히 종료시킵니다.
 
 ---
 
@@ -565,10 +609,12 @@ DataStore (reader_settings)
 로직은 `app/src/test`, Compose/Room/실제 측정은 `app/src/androidTest`입니다. 전체 계획은
 [`TESTING.md`](TESTING.md).
 
-대표적으로 라이브러리 정렬·폴더 탐색, 이어읽기 다이얼로그, 페이지 왕복, 먼 오프셋 점프, 목차 자동
-스크롤, 검색 시트, 퀵설정, 폰트 적용 후 재페이지, 챕터 인식 회귀, 폰트 다운로드(MockWebServer +
-실네트워크)가 있습니다. 기기 간 동기화(§15, §16)는 상대경로 정규화·델타 계산 같은 순수 로직과,
+대표적으로 라이브러리 정렬·폴더 탐색, 서재 화면에서 설정 시트 열기(`LibraryScreenSettingsAccessTest`),
+이어읽기 다이얼로그, 페이지 왕복, 먼 오프셋 점프, 목차 자동 스크롤, 검색 시트, 퀵설정, 폰트 적용 후
+재페이지, 챕터 인식 회귀, 폰트 다운로드(MockWebServer + 실네트워크)가 있습니다. 기기 간 동기화(§15,
+§16)는 상대경로 정규화·델타 계산·QR 페이로드 파싱(`QrPairingPayloadTest`) 같은 순수 로직과,
 `MockWebServer`(HTTPS 포함)로 검증하는 PC/Supabase 요청 프로토콜 계약까지가 자동화 테스트 범위이고,
-실제 SAF 파일 쓰기·서브넷 스캔·PC 쪽 트레이 UI/Windows 자동 실행은 실기기 수동 검증으로 남겨뒀습니다
-(`TESTING.md`의 "의도적으로 제외" 참고). PC 서버(Go)의 경로 탈출 방지 로직은
-`external_library/sync_server`에서 `go test ./...`로 별도 검증합니다.
+실제 카메라 QR 스캔·SAF 파일 쓰기·서브넷 스캔·PC 쪽 트레이 UI/Windows 자동 실행은 실기기 수동 검증으로
+남겨뒀습니다(`TESTING.md`의 "의도적으로 제외" 참고). PC 서버(Go)의 경로 탈출 방지 로직과 `/pair`의
+호스트 필드 형식(`TestHandlePair_HostFieldHasNoPort`)은 `external_library/sync_server`에서
+`go test ./...`로 별도 검증합니다.

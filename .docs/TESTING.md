@@ -315,6 +315,34 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
   이 라운드에서 검토했지만 의도적으로 손대지 않은 것 두 가지(VSCode 동기화 오케스트레이션, TTS
   청크/콜백 배선)는 아래 "의도적으로 제외" 목록에 사유와 함께 정리해뒀습니다.
 
+- [x] **Phase 13 — QR 페어링 + 서재 화면 설정 접근 + 멀티유저 전환** (`sync-qrcode` 브랜치,
+  2026-09-03, `.docs/SYNC_MULTIUSER_PLAN.md` 참고):
+  - (일반 유닛) `QrPairingPayloadTest` — `QrPairingPayload.parse`: `vscode_sync`/`pc_sync` 각각의
+    정상 JSON 파싱, `type` 필드가 없거나 모르는 값이면 null, 필수 필드(`secret`/`host`/`fingerprint`)
+    누락 시 null, JSON 자체가 깨졌을 때도 예외 없이 null(호출부가 "잘못된 QR"로 한데 묶어 처리할 수
+    있게).
+  - (androidTest) `ReadingPositionSyncClientTest`에 `restBase_stripsDuplicateRestV1SuffixAndWhitespace_fromBaseUrl`
+    추가 — `SUPABASE_URL` 시크릿 값에 실수로 `/rest/v1`이 중복 포함되거나 앞뒤 공백이 섞여 있어도
+    `restBase`가 정확한 엔드포인트로 정규화하는지. 실제로 배포된 GitHub 시크릿 값에 이 중복이 있어서
+    릴리스 빌드에서만 `PGRST125` 404가 나던 버그를 릴리스 APK를 직접 디컴파일해 확인한 뒤 추가한
+    회귀 테스트입니다.
+  - (androidTest) `LibraryScreenSettingsAccessTest` — 서재 화면 상단 바에서 연 `QuickSettingsSheet`가
+    (리더가 아니라) `LibraryViewModel`을 `SettingsController`로 받아도 값 변경이 실제로 DataStore에
+    커밋되는지. 서재 전용 진입 경로가 새로 생기면서 "시트는 열리는데 값이 안 저장된다"는 배선 누락을
+    잡기 위한 테스트입니다.
+  - (androidTest) `PcSyncSheetTest`의 실패 문구 검증을 정확히 일치 비교에서 `"연결 실패 —"` 접두사
+    포함(substring) 비교로 변경 — 이 라운드에서 실제 실패 원인 문자열을 화면에 그대로 보여주도록
+    UI를 바꾸면서(`lastTestConnectionError`) 문구 자체가 매번 달라질 수 있게 됐기 때문입니다.
+  - (Go, `external_library/sync_server`) `pair_test.go`의 `TestHandlePair_HostFieldHasNoPort` —
+    `/pair`가 만드는 QR 페이로드의 `host` 필드에 포트가 안 붙어 있는지. 안드로이드의 `PcSyncClient`가
+    호스트에 고정 포트(58221)를 스스로 붙이는 구조라, 포트가 QR에도 같이 실리면 `"IP:포트:포트"`로
+    겹쳐 `MalformedURLException`이 나던 실사용 버그의 회귀 방지입니다.
+  - 자동화 범위 밖(실기기 수동 검증): 실제 카메라로 QR을 스캔해 값이 맞게 채워지는지(ML Kit 인식 자체는
+    기기/조명에 좌우돼 자동화 신뢰도가 낮음), PC 서버의 Windows 알림이 실제로 논블로킹인지(트레이 앱을
+    직접 띄워 확인), `single_instance_windows.go`가 실제 두 번째 실행을 막는지, Supabase RLS
+    `user_key` 파티셔닝이 실제 DB에서 다른 시크릿끼리 서로의 행을 못 보게 막는지(SQL 콘솔에서 직접
+    확인 — `SYNC_MULTIUSER_PLAN.md`).
+
 ## 의도적으로 제외
 
 여기 있는 항목들은 "아직 못 했다"가 아니라 "해봤는데/따져봤는데 자동화가 답이 아니었다"입니다. 새로 뭔가를

@@ -23,6 +23,7 @@ Dedicated e-book/web-novel reader apps often ship fine-grained customization —
 - Automatic encoding detection for UTF-8 / EUC-KR / CP949 (via `juniversalchardet`)
 - Browses inside `.zip` archives like a folder and opens `.txt` files straight from them
 - On launch, offers to resume the last book you were reading
+- The library screen's top bar gives direct access to PC sync, sort, and app settings — no need to open a book first
 
 ### Reading experience
 - Two reading modes: **swipe pagination** and **vertical scroll**
@@ -45,8 +46,8 @@ Dedicated e-book/web-novel reader apps often ship fine-grained customization —
 - Timer-based auto page-turning or TTS narration (mutually exclusive)
 
 ### Cross-device sync (optional, off by default)
-- **Reading-position sync with VSCode** — if you also read the same `.txt` files through a companion VSCode extension on a PC, whichever device read further nudges the other to catch up. No accounts: you paste one shared-secret string into both sides, and a small Supabase project (its access policy, not a login system, is the real gate) relays just the offset. Best-effort by design — any failure (offline, unverified secret) is silently skipped and never blocks local reading/saving.
-- **File sync from a PC** — a small open-source Windows tray app you run on your PC ([`external_library/sync_server`](external_library/sync_server), plain Go, no install beyond the exe) shares a folder over HTTPS on your LAN; the Android app mirrors it into your library folder one-way (PC → phone) with a "Sync now" button. No cloud storage, no account — the PC serves as the server directly, authenticated by a secret you copy over once. The self-signed TLS certificate is trust-pinned SSH-style (trust-on-first-use) rather than CA-verified, since private LAN IPs can't get a real certificate.
+- **Reading-position sync with VSCode** — if you also read the same `.txt` files through a companion VSCode extension on a PC, whichever device read further nudges the other to catch up. No accounts: both sides need one shared-secret string, which you either paste in manually or pair instantly by scanning a QR code the other side shows (Android's camera scanner reuses the same flow for both sync features below). A small Supabase project relays just the offset — its access policy is the real gate, not a login system, and every installed app shares that one project, but a server-side trigger hashes each secret into its own `user_key` so installs can never see each other's rows. Best-effort by design — any failure (offline, unverified secret) is silently skipped and never blocks local reading/saving.
+- **File sync from a PC** — a small open-source Windows tray app you run on your PC ([`external_library/sync_server`](external_library/sync_server), plain Go, no install beyond the exe) shares a folder over HTTPS on your LAN; the Android app mirrors it into your library folder one-way (PC → phone) with a "Sync now" button. No cloud storage, no account — the PC serves as the server directly, authenticated by a secret you copy over once, or by scanning a QR code the tray app can show (bundles host, secret, and TLS fingerprint in one scan, skipping manual entry entirely). The self-signed TLS certificate is trust-pinned SSH-style (trust-on-first-use) rather than CA-verified, since private LAN IPs can't get a real certificate. All tray notifications are non-blocking Windows toasts — the server never sits waiting on a modal dialog you have to click through.
 
 ## Tech stack
 
@@ -83,19 +84,24 @@ com.moonkata.textreader/
 │   ├── file/                     — SAF folder browser, encoding detection, BookSource (zip support)
 │   ├── font/                     — Korean font catalog + download manager
 │   ├── parser/                   — TextReflower, ChapterDetector/ChapterPatternCatalog, Paginator, ChapterJumpNavigator
-│   ├── sync/                     — optional cross-device sync: VSCode reading-position client (Supabase)
-│   │                               and PC file-sync client (HTTPS + TLS fingerprint pinning)
+│   ├── sync/                     — optional cross-device sync: VSCode reading-position client (Supabase),
+│   │                               PC file-sync client (HTTPS + TLS fingerprint pinning), and the shared
+│   │                               QR pairing payload both scan flows parse
 │   └── repository/               — BookRepository
 ├── model/                        — Paragraph, Chapter, PageBreak, FolderEntry, etc.
 ├── ui/
 │   ├── library/                  — folder browser screen, "resume reading" dialog, PC sync sheet
 │   ├── reader/                   — reader screen, quick settings / TOC / search / font / chapter-pattern sheets
-│   └── theme/                    — theme presets
+│   ├── qr/                       — camera QR scanner shared by both sync pairing flows
+│   ├── theme/                    — theme presets
+│   └── SettingsController.kt     — interface the reader and library screens both implement, so the same
+│                                   settings sheets can be opened from either one
 ├── tts/                          — TtsController, AutoPageTurnController
 └── util/                         — SAF / collection extension functions
 
 external_library/
-└── sync_server/                  — companion PC tray app (Go, no framework) for the file-sync feature above
+└── sync_server/                  — companion PC tray app (Go, no framework) for the file-sync feature above,
+                                     including its own QR-pairing page and non-blocking toast notifications
 ```
 
 A file-by-file breakdown of exactly which files implement which feature, and how, lives in [`docs/FEATURES.md`](.docs/FEATURES.md). A step-by-step trace of which file/function runs for each user action lives in [`docs/USER_SCENARIOS.md`](.docs/USER_SCENARIOS.md).

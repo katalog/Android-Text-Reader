@@ -96,6 +96,9 @@ cd external_library/sync_server && go test ./...
 | 파일 읽기, 인코딩 감지, zip | `data/file/` |
 | 폰트 다운로드·적용 | `data/font/` |
 | 기기 간 동기화 | `data/sync/` + `external_library/sync_server/` |
+| 동기화 QR 스캔/생성 | `ui/qr/QrScannerDialog.kt`, `data/sync/QrPairingPayload.kt` (PC 서버 쪽은 `pair.go`) |
+| 서재 화면에서 리더를 안 거치고 설정/정렬/PC동기화 열기 | `ui/SettingsController.kt` (리더·서재 두
+  ViewModel이 공통 구현) |
 
 ### 지금 몰라도 되는 것
 
