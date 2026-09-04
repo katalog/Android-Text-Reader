@@ -3,7 +3,7 @@ package com.moonkata.textreader.util
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** 스크롤 모드 내비게이션(ReaderScrollContent)이 현재 위치의 문단 인덱스를 찾을 때 쓰는 이진 탐색 검증. */
+/** Verifies the binary search that scroll-mode navigation (ReaderScrollContent) uses to find the paragraph index at the current position. */
 class CollectionExtTest {
 
     @Test
@@ -13,7 +13,8 @@ class CollectionExtTest {
 
     @Test
     fun valueBelowAllElements_fallsBackToZero() {
-        // 진짜 "floor"는 없지만(가장 작은 원소보다도 작음), 문서화된 폴백 동작대로 0을 반환해야 함.
+        // There's no real "floor" here (the value is below even the smallest element), but per
+        // the documented fallback behavior it should return 0.
         assertEquals(0, listOf(10, 20, 30).binarySearchFloor(1))
     }
 

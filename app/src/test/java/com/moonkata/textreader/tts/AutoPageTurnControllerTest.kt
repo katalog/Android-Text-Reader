@@ -8,11 +8,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * 타이머 기반 자동 페이지 넘김의 tick 타이밍 검증. 실제 몇 초씩 기다리는 대신
- * kotlinx-coroutines-test의 가상 시간(TestScope/advanceTimeBy)으로 즉시, 결정적으로 검증한다 —
- * TESTING.md에 "타이머 자동넘김의 실제 타이밍은 신뢰성 낮아 제외"라고 적어뒀던 건 실제 시간을 쓰는
- * 경우 얘기고, 가상 시간으로는 안정적으로 검증 가능하다. AutoPageTurnController 자체는 Android
- * 의존성이 없는 순수 코루틴 코드라 일반 JUnit으로 둔다.
+ * Verifies the tick timing of timer-based auto page-turning. Instead of actually waiting several
+ * seconds, this uses kotlinx-coroutines-test's virtual time (TestScope/advanceTimeBy) to verify
+ * it instantly and deterministically — TESTING.md's note that "real timing of timer auto-advance
+ * is excluded as unreliable" refers to using real time; virtual time lets it be verified reliably.
+ * AutoPageTurnController itself is pure coroutine code with no Android dependency, so this is a
+ * plain JUnit test.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AutoPageTurnControllerTest {
@@ -49,7 +50,7 @@ class AutoPageTurnControllerTest {
         advanceTimeBy(20_000)
         runCurrent()
 
-        assertEquals("stop() 이후엔 더 이상 tick이 오면 안 됨", 1, tickCount)
+        assertEquals("No more ticks should arrive after stop()", 1, tickCount)
     }
 
     @Test
@@ -57,16 +58,16 @@ class AutoPageTurnControllerTest {
         var tickCount = 0
         val controller = AutoPageTurnController(scope = this) { tickCount++ }
 
-        controller.start(intervalSeconds = 100) // 이 테스트 안에서는 절대 안 끝날 정도로 긴 간격
+        controller.start(intervalSeconds = 100) // An interval long enough to never elapse within this test
         advanceTimeBy(1_000)
         runCurrent()
-        assertEquals("아직 첫 tick도 안 왔어야 함", 0, tickCount)
+        assertEquals("The first tick should not have arrived yet", 0, tickCount)
 
-        controller.start(intervalSeconds = 2) // 재시작 — 이전 타이머(100초짜리)는 취소되고 새로 시작
+        controller.start(intervalSeconds = 2) // Restart — the previous 100s timer is cancelled and a new one starts
         advanceTimeBy(2_000)
         runCurrent()
 
-        assertEquals("재시작 후엔 새 간격(2초) 기준으로 tick이 와야 함", 1, tickCount)
+        assertEquals("After restarting, the tick should arrive based on the new interval (2s)", 1, tickCount)
 
         controller.stop()
     }

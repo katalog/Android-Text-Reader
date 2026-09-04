@@ -28,14 +28,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * "폰트를 다운로드해서 적용하면 뷰어에 실제로 다르게 보이는지"의 end-to-end 검증. 실제 소설 +
- * 실제로 다운로드한 폰트로, 뷰어(`ReaderPagerContent`)가 정확히 하는 일을 그대로 재현한다 —
- * `LaunchedEffect`에서 `settings.fontFamilyId`가 바뀔 때마다 `FontResolver.resolve`로 새
- * `FontFamily`를 구해 `PaginationParams`에 담아 `onViewportMeasured`를 호출하는 것. 화면을 실제로
- * 렌더링해 픽셀을 비교하진 않지만(이 앱 종류에서 업계적으로도 잘 안 쓰는 스크린샷 테스트가 필요해
- * 제외), 다른 폰트는 같은 텍스트라도 한 페이지에 들어가는 분량이 달라지므로, 폰트 적용 전후로 페이지
- * 경계(끝 오프셋)가 실제로 달라지는지 확인하면 "뷰어가 진짜 다른 폰트로 다시 계산해 그렸다"는 걸
- * 안정적으로 증명할 수 있다.
+ * End-to-end verification of "does the viewer actually look different after downloading and applying
+ * a font." Reproduces exactly what the viewer (`ReaderPagerContent`) does, using a real novel and a
+ * font that's actually downloaded — in a `LaunchedEffect`, whenever `settings.fontFamilyId` changes,
+ * it resolves a new `FontFamily` via `FontResolver.resolve`, packs it into `PaginationParams`, and
+ * calls `onViewportMeasured`. It doesn't actually render the screen and compare pixels (that would
+ * require a screenshot test, which is uncommon industry-wide for this kind of app and is excluded
+ * here), but since a different font fits a different amount of the same text on one page, checking
+ * that the page boundary (end offset) actually changes before and after applying the font reliably
+ * proves "the viewer really did recompute and redraw with a different font."
  */
 @RunWith(AndroidJUnit4::class)
 class FontApplyRepaginatesViewerTest {
@@ -69,31 +70,31 @@ class FontApplyRepaginatesViewerTest {
 
             val textMeasurer = TestTextMeasurer.create(application)
 
-            // 1) 시스템 기본 폰트로 먼저 페이지를 계산해둔다.
+            // 1) First compute the page using the system default font.
             val defaultFontFamily = FontResolver.resolve(application, FontCatalog.SYSTEM_DEFAULT_ID)
             viewModel.onViewportMeasured(textMeasurer, testParams(defaultFontFamily))
             waitUntilTrue { viewModel.uiState.value.currentPage != null }
             val defaultFontPage = viewModel.uiState.value.currentPage!!
 
-            // 2) 실제로 나눔명조를 다운로드하고 적용한다(진짜 인터넷 사용).
+            // 2) Actually download and apply Nanum Myeongjo (real internet usage).
             val states = runBlocking { fontDownloadManager.download(fontEntry).toList() }
             assertTrue(
-                "실제 다운로드가 성공해야 이 테스트를 계속할 수 있음. 실패 상태: ${states.lastOrNull()}",
+                "The real download must succeed for this test to continue. Failure state: ${states.lastOrNull()}",
                 states.last() is FontDownloadState.Downloaded,
             )
             viewModel.selectFont(fontEntry.id)
             waitUntilTrue { viewModel.uiState.value.settings.fontFamilyId == fontEntry.id }
 
-            // 3) 폰트가 바뀌었으니 뷰어라면 다시 FontResolver로 새 FontFamily를 구해 재계산했을 것 —
-            //    그걸 그대로 재현한다.
+            // 3) Since the font changed, the viewer would have resolved a new FontFamily via
+            //    FontResolver again and recomputed — reproduce that exactly.
             val customFontFamily = FontResolver.resolve(application, fontEntry.id)
             viewModel.onViewportMeasured(textMeasurer, testParams(customFontFamily))
             waitUntilTrue { viewModel.uiState.value.currentPage != defaultFontPage }
             val customFontPage = viewModel.uiState.value.currentPage!!
 
             assertNotEquals(
-                "다른 폰트를 적용했으면 같은 시작 지점이라도 페이지에 들어가는 분량이 달라져야 함" +
-                    "(뷰어가 실제로 다시 그렸다는 증거)",
+                "After applying a different font, the amount of content fitting on a page should " +
+                    "differ even from the same starting point (proof the viewer actually redrew)",
                 defaultFontPage.endOffset,
                 customFontPage.endOffset,
             )

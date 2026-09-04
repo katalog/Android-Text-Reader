@@ -25,10 +25,11 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * ReaderScreen이 실제 책 내용을 불러와 보여주고, 뒤로가기 버튼이 콜백을 호출하는지 확인하는 기본
- * 렌더링 테스트. ReaderViewModel/ReaderViewModelFactory는 아직 LibraryViewModel처럼 DB를 주입받을
- * 수 없어(프로덕션 싱글톤 AppDatabase를 그대로 씀) 이 테스트도 실제 앱 DB를 쓰고, 끝나면 넣은 책
- * 기록을 지운다 — Phase 3에서 ReaderViewModel도 DI 가능하게 확장하면 인메모리 DB로 옮길 수 있다.
+ * Basic rendering test confirming ReaderScreen loads and displays actual book content, and that
+ * the back button invokes the callback. ReaderViewModel/ReaderViewModelFactory can't yet be
+ * injected with a DB like LibraryViewModel (it uses the production AppDatabase singleton as-is),
+ * so this test also uses the real app DB and cleans up the book record it inserted when done —
+ * this can move to an in-memory DB once Phase 3 extends ReaderViewModel to support DI too.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderScreenBasicTest {
@@ -57,20 +58,20 @@ class ReaderScreenBasicTest {
                 }
             }
 
-            // 상하단바는 로딩이 끝나면 자동으로 숨겨지므로(ReaderChromeAutoHideTest 참고), 제목 텍스트가
-            // 아니라 본문 내용으로 로딩 완료를 확인한다.
+            // The top/bottom bars auto-hide once loading finishes (see ReaderChromeAutoHideTest), so
+            // confirm loading is complete via body content rather than the title text.
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 composeTestRule.onAllNodesWithText("특별한 문장이 있습니다", substring = true).fetchSemanticsNodes().isNotEmpty()
             }
 
-            // 위쪽 30% 탭으로 상하단바를 다시 띄운 뒤 뒤로가기 버튼을 누른다.
+            // Tap the top 30% to bring the top/bottom bars back, then press the back button.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.5f, height * 0.1f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 composeTestRule.onAllNodesWithText(testFile.name).fetchSemanticsNodes().isNotEmpty()
             }
 
-            composeTestRule.onNodeWithContentDescription("뒤로").performClick()
-            assertTrue("뒤로가기 버튼을 누르면 onBack 콜백이 호출되어야 함", backCount > 0)
+            composeTestRule.onNodeWithContentDescription("Back").performClick()
+            assertTrue("Pressing the back button should invoke the onBack callback", backCount > 0)
         } finally {
             testFile.delete()
             runBlocking {

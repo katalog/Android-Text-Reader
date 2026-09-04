@@ -13,28 +13,31 @@ import java.net.URLEncoder
 data class RemoteReadingPosition(val charOffset: Int, val source: String, val encoding: String?)
 
 /**
- * Supabase PostgREST 직접 호출 — .docs/VSCODE_SYNC_PLAN.md §1/§4.
- * 실패(네트워크 끊김, 설정값 오류, 파싱 실패 등)는 전부 조용히 null/무시로 처리한다 — best-effort
- * 기능이라 이 클라이언트의 어떤 예외도 리더 화면의 핵심 흐름(로컬 로딩/저장)을 막으면 안 된다.
+ * Calls Supabase PostgREST directly — .docs/VSCODE_SYNC_PLAN.md §1/§4.
+ * Every failure (network drop, config error, parse failure, etc.) is silently treated as null/ignored —
+ * this is a best-effort feature, so no exception from this client should ever be allowed to block the
+ * reader screen's core flow (local loading/saving).
  */
 class ReadingPositionSyncClient(
     private val baseUrl: String,
     private val publishableKey: String,
     private val sharedSecret: String,
 ) {
-    // baseUrl은 프로젝트 기본 주소(예: https://xxx.supabase.co)만 와야 하는데, 실사용 중 GitHub
-    // 시크릿에 "/rest/v1"까지 같이 등록돼 있던 적이 실제로 있었다 — 그 상태로 아래에서 또
-    // "/rest/v1/reading_positions"를 붙이면 ".../rest/v1/rest/v1/reading_positions"처럼 경로가
-    // 겹쳐서 PostgREST가 "PGRST125: invalid path specified in request url"로 거부한다. trim()으로
-    // 공백/개행도 같이 방어(build.gradle.kts에서 한 번 trim하지만 이 클라이언트를 다른 곳에서도 쓸 수
-    // 있어 여기서 한 번 더), removeSuffix로 실수로 중복된 "/rest/v1"도 걷어낸다.
+    // baseUrl should only ever be the project's base address (e.g. https://xxx.supabase.co), but in
+    // actual use it happened that a GitHub secret had "/rest/v1" registered as part of it too — if
+    // "/rest/v1/reading_positions" is then appended below on top of that, the path overlaps into
+    // ".../rest/v1/rest/v1/reading_positions", which PostgREST rejects with "PGRST125: invalid path
+    // specified in request url". trim() also guards against stray whitespace/newlines (build.gradle.kts
+    // already trims once, but this client can be used elsewhere too, so trim again here), and
+    // removeSuffix strips off an accidentally duplicated "/rest/v1" as well.
     private val restBase: String
         get() = "${baseUrl.trim().trimEnd('/').removeSuffix("/rest/v1")}/rest/v1/reading_positions"
 
     /**
-     * [testConnection]이 실패했을 때 원인을 담아둔다 — 예전엔 어떤 예외든 조용히 false 하나로만
-     * 뭉개서, "네트워크가 끊겼나/시크릿이 틀렸나/URL 자체가 비었나"를 구분할 방법이 전혀 없었다(실사용
-     * 중 원인 특정이 안 돼서 추가). 설정 화면이 실패 이유를 사용자에게 그대로 보여줄 수 있게 한다.
+     * Holds the cause when [testConnection] fails — this used to collapse every exception silently into a
+     * single false, leaving no way at all to tell whether "the network dropped / the secret is wrong / the
+     * URL itself is empty" (added after the root cause couldn't be pinned down during actual use). Lets the
+     * settings screen show the failure reason to the user directly.
      */
     var lastTestConnectionError: String? = null
         private set
@@ -53,7 +56,7 @@ class ReadingPositionSyncClient(
                     encoding = if (obj.isNull("encoding")) null else obj.getString("encoding"),
                 )
             }
-        }.onFailure { Log.w(TAG, "위치 조회 실패", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "Failed to fetch reading position", it) }.getOrNull()
     }
 
     suspend fun upsert(relativePath: String, charOffset: Int, encoding: String?) {
@@ -71,20 +74,22 @@ class ReadingPositionSyncClient(
                     put("encoding", encoding ?: JSONObject.NULL)
                 }
                 OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(body.toString()) }
-                connection.inputStream.use { it.readBytes() } // 응답을 소비해야 요청이 실제로 완료됨
-            }.onFailure { Log.w(TAG, "위치 upsert 실패", it) }
+                connection.inputStream.use { it.readBytes() } // the response must be consumed for the request to actually complete
+            }.onFailure { Log.w(TAG, "Failed to upsert reading position", it) }
         }
     }
 
     /**
-     * 설정 화면의 "연결 테스트" 버튼용 — 고정된 더미 경로로 upsert를 시도해 시크릿이 RLS를 통과하는지
-     * 확인한다. 단순 조회로는 검증이 안 된다 — RLS가 막은 SELECT는 에러가 아니라 그냥 빈 배열을
-     * 돌려주므로(§1 curl 검증 때 확인한 내용) "행이 없어서 비었나 시크릿이 틀려서 비었나"를 구분할 수
-     * 없다. upsert(INSERT)는 RLS를 어기면 PostgREST가 401/403으로 명확히 거부하므로 이 차이를 이용한다.
+     * For the "test connection" button on the settings screen — attempts an upsert against a fixed dummy
+     * path to confirm the secret passes RLS. A plain read can't verify this — a SELECT blocked by RLS
+     * isn't an error, it just returns an empty array (confirmed during the §1 curl verification), so there's
+     * no way to distinguish "empty because there are no rows" from "empty because the secret is wrong."
+     * An upsert (INSERT) that violates RLS gets a clear 401/403 rejection from PostgREST, so that
+     * difference is used here.
      */
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
         lastTestConnectionError = if (baseUrl.isBlank() || publishableKey.isBlank()) {
-            "SUPABASE_URL/PUBLISHABLE_KEY가 앱 빌드에 비어있음(BuildConfig 주입 안 됨)"
+            "SUPABASE_URL/PUBLISHABLE_KEY is empty in the app build (BuildConfig not injected)"
         } else {
             null
         }
@@ -110,7 +115,7 @@ class ReadingPositionSyncClient(
             }
             code in 200..299
         }.onFailure {
-            Log.w(TAG, "연결 테스트 실패", it)
+            Log.w(TAG, "Connection test failed", it)
             lastTestConnectionError = "${it.javaClass.simpleName}: ${it.message}"
         }.getOrDefault(false)
     }
@@ -120,8 +125,8 @@ class ReadingPositionSyncClient(
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 10_000
-            // 신규 Supabase 키 체계(publishable/secret)는 apikey 헤더에만 넣는다 — Authorization: Bearer에
-            // 같이 넣으면 JWT로 파싱을 시도하다 거부된다(§1 참고).
+            // The new Supabase key scheme (publishable/secret) only goes in the apikey header — putting it
+            // in Authorization: Bearer as well causes it to be rejected as an attempted JWT parse (see §1).
             setRequestProperty("apikey", publishableKey)
             setRequestProperty("x-moonkata-secret", sharedSecret)
         }

@@ -11,18 +11,21 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 /**
- * PC 트레이 서버의 자체 서명 인증서를 다루는 신뢰 로직 — .docs/PC_SYNC_SERVER_PLAN.md §5.
- * 사설 IP엔 공인 CA가 인증서를 못 주므로, 시스템 기본 신뢰 체인 검증 대신 SSH 방식(TOFU: 최초 접속
- * 때 지문을 저장해두고 이후로는 그 지문과 정확히 같은지만 확인)을 쓴다.
+ * Trust logic for handling the PC tray server's self-signed certificate — .docs/PC_SYNC_SERVER_PLAN.md §5.
+ * Since a private IP can't get a certificate from a public CA, this uses the SSH-style approach (TOFU:
+ * save the fingerprint on first connection, and afterward only check that it matches exactly) instead of
+ * the system's default trust-chain validation.
  *
- * - [createLenientSslContext]: "PC 찾기" 스캔이나 "연결 테스트" 최초 시도처럼 아직 아무것도 못 믿는
- *   단계에서만 쓴다 — 어떤 인증서든 받아들이지만, 이 단계에선 시크릿도 같이 보내지 않거나(스캔) 딱
- *   그 자리에서 지문을 저장하는 용도로만 쓴다(연결 테스트).
- * - [createPinnedSslContext]: 실제 동기화(`/list`, `/file`)에서 쓴다 — 저장해둔 지문과 정확히 일치하는
- *   인증서만 받아들인다.
+ * - [createLenientSslContext]: used only during stages where nothing is trusted yet, like the "find PC"
+ *   scan or the first "test connection" attempt — accepts any certificate, but at this stage either the
+ *   secret isn't sent along at all (scan), or the certificate is used purely to record the fingerprint on
+ *   the spot (connection test).
+ * - [createPinnedSslContext]: used for actual sync (`/list`, `/file`) — only accepts a certificate that
+ *   exactly matches the saved fingerprint.
  *
- * 호스트명 검증은 항상 통과시킨다 — IP로 접속하는 경우가 대부분이고, 애초에 신뢰 근거가 CN/SAN이
- * 아니라 지문 고정이라 호스트명 일치는 이 방식에서 의미가 없다.
+ * Hostname verification always passes — connections are mostly by IP, and since the basis of trust here is
+ * fingerprint pinning rather than CN/SAN in the first place, hostname matching is meaningless under this
+ * scheme.
  */
 val acceptAllHostnameVerifier = HostnameVerifier { _, _ -> true }
 
@@ -41,7 +44,7 @@ fun createPinnedSslContext(expectedFingerprint: String): SSLContext {
         override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
             val presented = chain.firstOrNull()?.let { sha256Fingerprint(it) }
             if (presented == null || !presented.equals(expectedFingerprint, ignoreCase = true)) {
-                throw CertificateException("PC 인증서 지문이 저장된 값과 다릅니다 — 연결 테스트를 다시 해보세요.")
+                throw CertificateException("The PC's certificate fingerprint doesn't match the saved value — try the connection test again.")
             }
         }
         override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
@@ -49,7 +52,7 @@ fun createPinnedSslContext(expectedFingerprint: String): SSLContext {
     return SSLContext.getInstance("TLS").apply { init(null, pinned, SecureRandom()) }
 }
 
-/** 인증서의 SHA-256 지문을 16진수 문자열로 — `openssl x509 -fingerprint -sha256`와 같은 계산. */
+/** Computes a certificate's SHA-256 fingerprint as a hex string — equivalent to `openssl x509 -fingerprint -sha256`. */
 fun sha256Fingerprint(cert: Certificate): String {
     val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
     return digest.joinToString(":") { "%02X".format(it) }

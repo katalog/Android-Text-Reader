@@ -29,9 +29,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `ChapterPatternSheet`(USER_SCENARIOS.md §8)는 지금까지 테스트가 없었다 — 순수 로직인
- * `ChapterPatternCatalog`/`ChapterDetector`만 검증돼 있었다. 여기서는 시트 UI를 실제로 조작해서
- * 설정이 바뀌고(그리고 그 결과로 챕터 재인식까지 실제로 일어나는지) 확인한다.
+ * `ChapterPatternSheet` (USER_SCENARIOS.md §8) had no tests until now — only the pure logic,
+ * `ChapterPatternCatalog`/`ChapterDetector`, was verified. Here, the sheet UI is actually
+ * manipulated to confirm settings change (and, as a result, that chapter re-detection genuinely happens).
  */
 @RunWith(AndroidJUnit4::class)
 class ChapterPatternSheetTest {
@@ -41,7 +41,7 @@ class ChapterPatternSheetTest {
 
     @Test
     fun togglingTheBuiltinPreset_updatesSettings_andActuallyChangesDetectedChapters() {
-        val bookAsset = "Heuk.txt" // "## 제N장" 헤더가 실제로 있는 픽스처
+        val bookAsset = "Heuk.txt" // a fixture that actually has "## Chapter N" headers
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
@@ -54,7 +54,7 @@ class ChapterPatternSheetTest {
         try {
             waitUntilTrue { viewModel.uiState.value.paragraphs.isNotEmpty() }
             waitUntilTrue(timeoutMs = 10_000) { viewModel.uiState.value.chapters.isNotEmpty() }
-            assertTrue("픽스처 특성상 처음엔 '## 제N장' 프리셋으로 챕터가 잡혀 있어야 함", viewModel.uiState.value.chapters.isNotEmpty())
+            assertTrue("Given the fixture, chapters should initially be detected by the '## Chapter N' preset", viewModel.uiState.value.chapters.isNotEmpty())
 
             composeTestRule.setContent {
                 MaterialTheme {
@@ -64,11 +64,11 @@ class ChapterPatternSheetTest {
             }
             composeTestRule.waitForIdle()
 
-            // 프리셋이 이거 하나뿐이라 isToggleable()만으로 특정 가능.
+            // There's only this one preset, so isToggleable() alone is enough to identify it.
             composeTestRule.onNode(isToggleable()).performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { "hash" !in viewModel.uiState.value.settings.chapterPatternEnabledIds }
 
-            // 유일한 프리셋을 껐으니 다시 스캔하면 챕터가 하나도 안 잡혀야 한다 — 실제 재인식이 일어났다는 증거.
+            // With the only preset turned off, rescanning must detect zero chapters — proof that re-detection actually happened.
             waitUntilTrue(timeoutMs = 10_000) { viewModel.uiState.value.chapters.isEmpty() }
 
             val persisted = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
@@ -106,10 +106,10 @@ class ChapterPatternSheetTest {
 
             val pattern = """^Vol\.\s*\d+"""
             composeTestRule.onNode(hasSetTextAction()).performTextInput(pattern)
-            composeTestRule.onNodeWithContentDescription("추가").performClick()
+            composeTestRule.onNodeWithContentDescription("Add").performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) { pattern in viewModel.uiState.value.settings.chapterCustomPatterns }
-            // 입력창이 실제로 비워졌는지 — 추가된 패턴은 목록에 별도로 나오니, 입력 필드 자체의 텍스트값을 직접 읽는다.
+            // Whether the input field was actually cleared — the added pattern shows up separately in the list, so read the input field's own text value directly.
             val fieldText = composeTestRule.onNode(hasSetTextAction()).fetchSemanticsNode()
                 .config.getOrNull(SemanticsProperties.EditableText)?.text
             assertEquals("", fieldText)
@@ -147,14 +147,14 @@ class ChapterPatternSheetTest {
             }
             composeTestRule.waitForIdle()
 
-            val invalidPattern = "(["  // 닫히지 않은 문자 클래스/그룹 — 유효한 정규식이 아님
+            val invalidPattern = "(["  // an unclosed character class/group — not a valid regex
             composeTestRule.onNode(hasSetTextAction()).performTextInput(invalidPattern)
-            composeTestRule.onNodeWithContentDescription("추가").performClick()
+            composeTestRule.onNodeWithContentDescription("Add").performClick()
             composeTestRule.waitForIdle()
 
-            composeTestRule.onNodeWithText("올바른 정규식이 아니에요").assertExists()
+            composeTestRule.onNodeWithText("That's not a valid regular expression").assertExists()
             assertTrue(
-                "잘못된 정규식은 저장되면 안 됨",
+                "An invalid regex must not be persisted",
                 runBlocking { viewModel.settingsRepository.settingsFlow.first() }.chapterCustomPatterns.isEmpty(),
             )
         } finally {
@@ -192,7 +192,7 @@ class ChapterPatternSheetTest {
             composeTestRule.waitForIdle()
 
             composeTestRule.onNodeWithText(existingPattern).assertExists()
-            composeTestRule.onNodeWithContentDescription("삭제").performClick()
+            composeTestRule.onNodeWithContentDescription("Delete").performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 existingPattern !in viewModel.uiState.value.settings.chapterCustomPatterns

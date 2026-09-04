@@ -1,6 +1,7 @@
 package com.moonkata.textreader.data.font
 
 import android.content.Context
+import com.moonkata.textreader.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -55,7 +56,7 @@ class FontDownloadManager(private val context: Context) {
             tempFile.renameTo(target)
             emit(FontDownloadState.Downloaded)
         } catch (e: Exception) {
-            emit(FontDownloadState.Failed(e.message ?: "다운로드 실패"))
+            emit(FontDownloadState.Failed(e.message ?: context.getString(R.string.font_download_failed_fallback)))
         } finally {
             connection?.disconnect()
         }

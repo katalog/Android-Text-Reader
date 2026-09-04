@@ -1,6 +1,6 @@
 package com.moonkata.textreader.util
 
-/** 정렬된 리스트에서 value 이하인 마지막 원소의 인덱스를 찾는다 (없으면 0). */
+/** Finds the index of the last element <= value in a sorted list (0 if none). */
 fun List<Int>.binarySearchFloor(value: Int): Int {
     if (isEmpty()) return 0
     var lo = 0

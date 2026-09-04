@@ -24,12 +24,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 페이지 모드 재설계(전역 페이지 리스트 없이 currentPage 하나만 그때그때 계산)의 핵심 계약을 실제
- * 대용량 소설로 검증한다: 정방향으로 N번 넘긴 뒤 역방향으로 N번 넘기면, 방문 이력 스택 덕분에 다시
- * 계산하지 않고도 시작 페이지와 정확히 같은 곳으로 돌아와야 한다.
+ * Verifies the core contract of the page-mode redesign (no global page list — only the single
+ * currentPage is computed on demand) using a real, large novel: advancing forward N times and then
+ * backward N times should return to exactly the starting page, without recomputation, thanks to the
+ * visit-history stack.
  *
- * 화면 렌더링 없이 ReaderViewModel을 직접 구동한다 — 페이지 이동이 더 이상 Compose Pager/이벤트에
- * 의존하지 않아서, 이 계약은 뷰모델만으로 완전히 검증 가능하다.
+ * Drives ReaderViewModel directly without screen rendering — since page navigation no longer depends
+ * on the Compose Pager/events, this contract can be fully verified with the view model alone.
  */
 @RunWith(AndroidJUnit4::class)
 class PageNavigationRoundTripTest {
@@ -43,17 +44,20 @@ class PageNavigationRoundTripTest {
         val settingsRepository = ReaderSettingsRepository(application)
         val bookId = runBlocking { TestBooks.insertBook(application, bookRepository, BOOK_ASSET) }
 
-        // 이 테스트는 실제 앱과 같은 DataStore를 쓴다 — 실기기에 남아있던 다른 설정(세로 스크롤
-        // 모드, 자동 타이머 넘김 켜짐 등)이 섞이면 next()/previous()가 페이지 모드로 안 가거나,
-        // 타이머가 백그라운드에서 몰래 next()를 더 호출해 방문 이력 스택이 테스트가 센 횟수와
-        // 어긋난다 — 그래서 이 테스트에 필요한 설정만 강제로 고정하고, 끝나면 원래 값으로 되돌린다.
+        // This test uses the same DataStore as the real app — if other settings left on the real
+        // device (vertical scroll mode, auto timer advance turned on, etc.) leak in, next()/previous()
+        // may not go through page mode, or a timer could silently call next() extra times in the
+        // background, throwing off the visit-history stack relative to the count the test expects —
+        // so only the settings this test needs are forced to fixed values, then restored to their
+        // originals when done.
         val originalSettings = runBlocking { settingsRepository.settingsFlow.first() }
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            // chapterJumpEnabled가 켜져 있으면 next()/previous()가 방문 이력 스택이 아니라
-            // ChapterJumpNavigator의 목차 등분 breakpoint를 타서, 이 테스트가 검증하려는
-            // "페이지 단위 방문 이력" 계약과 전혀 다른 이동 방식이 돼버린다.
+            // If chapterJumpEnabled is on, next()/previous() take ChapterJumpNavigator's
+            // evenly-divided TOC breakpoints instead of the visit-history stack, becoming a
+            // completely different navigation mode than the "per-page visit history" contract this
+            // test verifies.
             settingsRepository.updateChapterJumpEnabled(false)
         }
 
@@ -79,7 +83,7 @@ class PageNavigationRoundTripTest {
             }
 
             val farPage = viewModel.uiState.value.currentPage
-            assertNotEquals("여러 페이지 전진했으면 시작 페이지와 달라야 함", startPage, farPage)
+            assertNotEquals("After advancing several pages, it should differ from the starting page", startPage, farPage)
 
             repeat(steps) {
                 val before = viewModel.uiState.value.currentPage
@@ -88,7 +92,7 @@ class PageNavigationRoundTripTest {
             }
 
             assertEquals(
-                "정방향으로 넘긴 만큼 역방향으로 돌아오면 시작 페이지와 정확히 같아야 함(방문 이력 스택)",
+                "Going backward the same number of steps advanced forward should return to exactly the starting page (visit-history stack)",
                 startPage,
                 viewModel.uiState.value.currentPage,
             )

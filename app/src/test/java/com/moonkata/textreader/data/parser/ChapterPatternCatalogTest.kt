@@ -5,19 +5,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 프리셋 자기 검증(각 프리셋의 example이 실제로 자기 pattern에 매칭되는지, id 중복 방지)과
- * buildRegexList의 조합/제외 로직. id 유일성 검증은 지금 프리셋이 하나뿐이라 당장은 자명하지만,
- * 나중에 프리셋을 추가할 때 복붙 실수를 잡아주는 회귀 방지용. (커스텀 정규식 오류 처리·챕터
- * 중복집계 방지는 ChapterDetectorEdgeCaseTest에서 이미 다룸)
+ * Preset self-validation (each preset's example actually matches its own pattern, no duplicate ids)
+ * plus buildRegexList's combine/exclude logic. Uniqueness is trivially true today since there's only
+ * one preset, but it's a regression guard against copy-paste mistakes when a preset gets added later.
+ * (Custom-regex error handling and duplicate-chapter-counting prevention are already covered by
+ * ChapterDetectorEdgeCaseTest.)
+ *
+ * [knownExamples] duplicates the English example text from strings.xml as a plain string, since a
+ * pure-JVM unit test can't resolve Android string resources — [presets] only carries `@StringRes` ids
+ * now. `getValue` throwing for a preset with no entry here is itself the regression guard mentioned
+ * above.
  */
 class ChapterPatternCatalogTest {
+
+    private val knownExamples = mapOf(
+        "hash" to "## Chapter 1: An Utterly Ordinary Beginning",
+    )
 
     @Test
     fun everyPreset_ownExampleMatchesItsOwnPattern() {
         for (preset in ChapterPatternCatalog.presets) {
+            val example = knownExamples.getValue(preset.id)
             assertTrue(
-                "프리셋 '${preset.id}'의 example(\"${preset.example}\")이 자기 pattern에 매칭돼야 함",
-                preset.pattern.matches(preset.example),
+                "preset '${preset.id}'s example (\"$example\") should match its own pattern",
+                preset.pattern.matches(example),
             )
         }
     }

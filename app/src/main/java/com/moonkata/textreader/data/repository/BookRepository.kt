@@ -16,10 +16,12 @@ class BookRepository(
     fun observeBook(bookId: Long): Flow<BookEntity?> = bookDao.getById(bookId)
 
     /**
-     * 폴더뷰에서 파일을 탭했을 때 호출 — 이미 열어본 적 있으면 기존 기록을, 처음이면 새 기록을 반환.
-     * [relativePath]는 VSCode 동기화 매칭 키(§3) — zip 안 파일 등 계산 불가한 경우 빈 문자열.
-     * 이미 등록된 책이라도 relativePath가 다르면(비어있었거나 폴더가 옮겨진 경우) 그때그때 갱신한다 —
-     * 강제 백필 없이 재방문 시 자연스럽게 채워지도록 하는 설계(§열린 질문 6).
+     * Called when a file is tapped in the folder view — returns the existing record if it's already
+     * been opened before, or creates a new one on first open.
+     * [relativePath] is the VSCode sync matching key (§3) — an empty string when it can't be computed
+     * (e.g. a file inside a zip). Even for an already-registered book, if relativePath differs (it was
+     * empty, or the folder was moved), it's updated on the spot — the design lets it fill in naturally
+     * on revisit instead of a forced backfill (§Open Question 6).
      */
     suspend fun findOrCreateBook(source: BookSource, displayName: String, sizeBytes: Long, relativePath: String = ""): Long {
         val storedUri = source.toStoredString()
@@ -46,7 +48,7 @@ class BookRepository(
         return BookContentReader.read(context, source)
     }
 
-    /** [book]의 실제 파일을 지금 열 수 있는지 확인 — 삭제/이동되었거나 SAF 권한이 회수됐으면 false. */
+    /** Checks whether [book]'s actual file can be opened right now — false if it was deleted/moved or SAF permission was revoked. */
     suspend fun bookFileExists(book: BookEntity): Boolean {
         val source = BookSource.fromStoredString(book.documentUri)
         return BookContentReader.exists(context, source)
@@ -56,7 +58,7 @@ class BookRepository(
         bookDao.updateMeta(bookId, totalCharCount, encoding)
     }
 
-    /** 서재 브라우징을 거치지 않고 책이 로드된 경우(이어서 읽기 등)의 relativePath 폴백 백필용. */
+    /** Fallback backfill for relativePath when a book is loaded without going through library browsing (e.g. resume reading). */
     suspend fun updateRelativePath(bookId: Long, relativePath: String) {
         bookDao.updateRelativePath(bookId, relativePath)
     }

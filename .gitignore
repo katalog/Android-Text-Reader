@@ -2,34 +2,32 @@
 #    .gitignore for Android Studio Projects
 # ===============================================
 
-# Built application files (빌드된 애플리케이션 파일)
+# Built application files
 *.apk
 *.aab
 *.ap_
 
-# Files for the ART/Dalvik VM (ART/달빅 가상 머신용 파일)
+# Files for the ART/Dalvik VM
 *.dex
 
-# Built native files (빌드된 네이티브 파일)
+# Built native files
 **/*.so
 **/*.a
 **/*.dll
 **/*.exe
 
-# Build directory (빌드 디렉터리)
+# Build directory
 build/
 .cxx/
 
-# Gradle cache (그래들 캐시)
+# Gradle cache
 .gradle/
 
-# Local configuration file (로컬 설정 파일)
+# Local configuration file
 # Contains SDK path and other sensitive information.
-# SDK 경로 및 민감한 정보를 포함하므로 반드시 제외해야 합니다.
 local.properties
 
 # IDE files (Android Studio / IntelliJ)
-# IDE(안드로이드 스튜디오) 관련 파일
 # .idea/modules.xml, .idea/workspace.xml, and .idea/libraries are user-specific.
 # *.iml files are module-specific and are often generated.
 *.iml
@@ -42,30 +40,28 @@ local.properties
 
 # Keystore files (VERY IMPORTANT)
 # Release signing keys must NEVER be shared.
-# 릴리즈 서명 키는 절대 공유해서는 안 됩니다.
 *.jks
 *.keystore
 keystore.properties
 
-# Log files (로그 파일)
+# Log files
 *.log
 */build/reports/
 
-# Profiler and memory snapshots (프로파일러 및 메모리 덤프 파일)
+# Profiler and memory snapshots
 captures/
 *.hprof
 *.prof
 
-# Google services file (구글 서비스 파일)
+# Google services file
 # If each developer has their own, ignore it. If it's a shared dev file, comment this line out.
-# 각 개발자가 자신의 파일을 사용한다면 제외하고, 개발용으로 공유하는 파일이라면 이 줄을 주석 처리하세요.
 google-services.json
 
-# Temporary files from Android Studio (안드로이드 스튜디오 임시 파일)
+# Temporary files from Android Studio
 .DS_Store
 Thumbs.db
 
-# Kover reports (코틀린 코드 커버리지 리포트)
+# Kover reports (Kotlin code coverage)
 **/reports/kover
 
 # Scratch screenshots/UI dumps from device testing

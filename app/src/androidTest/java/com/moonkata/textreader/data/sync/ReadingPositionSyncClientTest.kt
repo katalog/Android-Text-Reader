@@ -15,8 +15,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `ReadingPositionSyncClient`가 Supabase PostgREST에 보내는 실제 요청 모양(경로/헤더/바디)과 응답
- * 파싱을 로컬 가짜 서버(MockWebServer)로 검증한다 — 진짜 Supabase 프로젝트 없이 프로토콜 계약만 확인.
+ * Verifies the actual shape of the requests `ReadingPositionSyncClient` sends to Supabase
+ * PostgREST (path/headers/body) and its response parsing, using a local fake server
+ * (MockWebServer) — checks only the protocol contract, without a real Supabase project.
  */
 @RunWith(AndroidJUnit4::class)
 class ReadingPositionSyncClientTest {
@@ -97,7 +98,7 @@ class ReadingPositionSyncClientTest {
         assertEquals("test-publishable-key", request.getHeader("apikey"))
         assertEquals("test-shared-secret", request.getHeader("x-moonkata-secret"))
         assertTrue(
-            "인코딩된 상대경로가 쿼리에 포함돼야 함: ${request.path}",
+            "The encoded relative path must be included in the query: ${request.path}",
             request.path?.contains("relative_path=eq.") == true && request.path?.contains(" ") != true,
         )
     }
@@ -143,11 +144,13 @@ class ReadingPositionSyncClientTest {
     }
 
     /**
-     * 실사용 중 GitHub 시크릿 SUPABASE_URL이 "https://xxx.supabase.co/rest/v1"로(끝에 /rest/v1까지
-     * 포함해서) 잘못 등록된 적이 있었다 — 클라이언트가 다시 "/rest/v1/reading_positions"를 이어붙여
-     * 경로가 겹쳐서(".../rest/v1/rest/v1/reading_positions") Supabase가 "PGRST125: invalid path"로
-     * 거부했다. baseUrl 끝에 공백/개행이 섞여도, "/rest/v1"이 중복으로 붙어있어도 실제 요청 경로는
-     * 항상 정확히 "/rest/v1/reading_positions" 하나여야 한다.
+     * In real usage, the GitHub secret SUPABASE_URL was once registered incorrectly as
+     * "https://xxx.supabase.co/rest/v1" (including the trailing /rest/v1) — the client then
+     * appended "/rest/v1/reading_positions" again, duplicating the path
+     * (".../rest/v1/rest/v1/reading_positions"), which Supabase rejected with
+     * "PGRST125: invalid path". Even if whitespace/newlines get mixed into the end of baseUrl, or
+     * "/rest/v1" is duplicated, the actual request path must always be exactly one
+     * "/rest/v1/reading_positions".
      */
     @Test
     fun restBase_stripsDuplicateRestV1SuffixAndWhitespace_fromBaseUrl() {
@@ -162,9 +165,9 @@ class ReadingPositionSyncClientTest {
 
         val request = server.takeRequest()
         assertTrue(
-            "경로가 정확히 /rest/v1/reading_positions 하나여야 함(중복/공백 없이): ${request.path}",
+            "The path must be exactly /rest/v1/reading_positions once (no duplication/whitespace): ${request.path}",
             request.path?.startsWith("/rest/v1/reading_positions") == true,
         )
-        assertFalse("‘/rest/v1’이 중복으로 남으면 안 됨: ${request.path}", request.path?.contains("v1/rest") == true)
+        assertFalse("'/rest/v1' must not remain duplicated: ${request.path}", request.path?.contains("v1/rest") == true)
     }
 }

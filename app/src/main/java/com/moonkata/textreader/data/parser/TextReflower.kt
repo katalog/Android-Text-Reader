@@ -12,7 +12,7 @@ object TextReflower {
         }
     }
 
-    /** 원문 줄바꿈을 그대로 유지 — 매 줄이 하나의 문단이 된다. */
+    /** Keeps the original line breaks as-is — each line becomes one paragraph. */
     private fun preserveLines(text: String): List<Paragraph> {
         val paragraphs = mutableListOf<Paragraph>()
         val n = text.length
@@ -30,7 +30,7 @@ object TextReflower {
         return paragraphs
     }
 
-    /** 빈 줄(연속 개행) = 문단 경계, 단일 개행은 공백으로 이어붙임. */
+    /** A blank line (consecutive newlines) marks a paragraph boundary; a single newline is joined with a space. */
     private fun reflowParagraphs(text: String): List<Paragraph> {
         val paragraphs = mutableListOf<Paragraph>()
         val n = text.length

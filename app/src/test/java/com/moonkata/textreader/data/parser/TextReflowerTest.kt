@@ -5,12 +5,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * 문단화(PRESERVE/REFLOW) 로직 검증. 여기서 만든 Paragraph 목록을 페이지네이션이 그대로 쓰기 때문에,
- * 여기 버그는 곧바로 페이지 계산 전체를 틀어지게 한다. Android 의존성이 없어 일반 JUnit으로 둔다.
+ * Verifies the paragraph-splitting (PRESERVE/REFLOW) logic. Pagination consumes the Paragraph
+ * list produced here as-is, so a bug here immediately throws off the entire page calculation.
+ * Has no Android dependency, so this is a plain JUnit test.
  */
 class TextReflowerTest {
 
-    // --- PRESERVE: 매 줄이 그대로 하나의 문단 ---
+    // --- PRESERVE: every line becomes its own paragraph as-is ---
 
     @Test
     fun preserve_basicMultilineSplit() {
@@ -28,8 +29,9 @@ class TextReflowerTest {
 
         val paragraphs = TextReflower.reflow(text, LineBreakMode.PRESERVE)
 
-        // 매 줄이 하나의 문단이라, 끝에 개행이 하나 더 있으면 마지막에 빈 문단이 하나 더 생긴다
-        // (i==n 지점도 항상 문단 경계로 처리하기 때문 — 의도된 동작).
+        // Since every line is its own paragraph, one extra trailing newline produces one extra
+        // empty paragraph at the end (because the i==n position is also always treated as a
+        // paragraph boundary — this is intentional).
         assertEquals(listOf("첫줄", "둘째줄", ""), paragraphs.map { it.text })
         assertEquals(listOf(0 to 2, 4 to 7, 9 to 9), paragraphs.map { it.startOffset to it.endOffset })
     }
@@ -40,7 +42,8 @@ class TextReflowerTest {
 
         val paragraphs = TextReflower.reflow(text, LineBreakMode.PRESERVE)
 
-        // REFLOW와 달리 빈 줄도 병합하지 않고 그 자체로 빈 문단이 된다(줄=문단 1:1 유지).
+        // Unlike REFLOW, a blank line is not merged away — it becomes its own empty paragraph
+        // (keeping a strict 1:1 line-to-paragraph mapping).
         assertEquals(listOf("첫줄", "", "셋째줄", ""), paragraphs.map { it.text })
     }
 
@@ -53,7 +56,7 @@ class TextReflowerTest {
         assertEquals(0, paragraphs[0].endOffset)
     }
 
-    // --- REFLOW: 빈 줄(연속 개행)=문단 경계, 단일 개행=공백으로 이어붙임 ---
+    // --- REFLOW: a blank line (consecutive newlines) = paragraph boundary, a single newline = joined with a space ---
 
     @Test
     fun reflow_singleNewline_joinsLinesWithASpace() {
@@ -92,7 +95,8 @@ class TextReflowerTest {
 
         val paragraphs = TextReflower.reflow(text, LineBreakMode.REFLOW)
 
-        // 빈 줄이 몇 개든 문단 경계는 한 번이지, 그 사이에 빈 문단들이 끼어들면 안 된다.
+        // No matter how many blank lines there are, it's still a single paragraph boundary —
+        // no empty paragraphs should be inserted in between.
         assertEquals(listOf("A", "B"), paragraphs.map { it.text })
     }
 

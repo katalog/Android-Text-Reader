@@ -26,7 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.font.FontCatalog
 import com.moonkata.textreader.data.font.FontCatalogEntry
@@ -39,10 +41,10 @@ import kotlinx.coroutines.launch
 fun FontPickerSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("폰트", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.font_picker_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             FontRow(
-                displayName = "시스템 기본",
+                displayName = stringResource(R.string.font_picker_system_default),
                 selected = settings.fontFamilyId == FontCatalog.SYSTEM_DEFAULT_ID,
                 downloaded = true,
                 downloading = false,
@@ -101,7 +103,7 @@ private fun FontRow(
             downloading -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             !downloaded && onDownload != null -> {
                 IconButton(onClick = onDownload) {
-                    Icon(Icons.Default.Download, contentDescription = "다운로드")
+                    Icon(Icons.Default.Download, contentDescription = stringResource(R.string.font_picker_download_desc))
                 }
             }
             else -> {}

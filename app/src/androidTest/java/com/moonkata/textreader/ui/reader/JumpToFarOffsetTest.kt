@@ -17,11 +17,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 검색결과/목차/챕터점프로 도착하는 실제 경로 — jumpToOffset이 목표 오프셋에서 시작하는 페이지를
- * 곧바로 계산해 보여주는지, 실제 소설의 뒷부분(시작 위치와 확실히 먼 지점)으로 검증한다.
- * 예전 구조(책 전체 페이지 리스트)에서는 아직 계산 안 된 먼 지점으로 점프하면 계산된 범위의
- * 가장 가까운 끝으로 클램프되는 버그가 있었는데, 지금 구조는 점프할 때마다 그 지점부터 바로
- * 한 페이지를 계산하므로 그 버그 자체가 구조적으로 재발할 수 없다 — 그래도 회귀 방지용으로 남겨둔다.
+ * The real path arriving via search result/TOC/chapter jump — verifies, using a point well into a
+ * real novel's latter half (definitely far from the starting position), that jumpToOffset immediately
+ * computes and shows the page starting at the target offset. The old architecture (a full-book page
+ * list) had a bug where jumping to a far, not-yet-computed point would clamp to the nearest end of the
+ * computed range — the current architecture computes exactly one page starting from that point on
+ * every jump, so the bug itself can no longer structurally recur — it's kept anyway as a regression guard.
  */
 @RunWith(AndroidJUnit4::class)
 class JumpToFarOffsetTest {
@@ -35,9 +36,10 @@ class JumpToFarOffsetTest {
         val settingsRepository = ReaderSettingsRepository(application)
         val bookId = runBlocking { TestBooks.insertBook(application, bookRepository, BOOK_ASSET) }
 
-        // 실기기의 실제 DataStore를 공유하므로, jumpToOffset이 페이지 모드 경로(jumpToPageAt)를 타도록
-        // pageTurnMode를 강제로 고정해둔다 — 세로 스크롤 모드로 남아있으면 currentPage가 아예 갱신되지
-        // 않아 테스트가 타임아웃으로 실패한다. 끝나면 원래 값으로 되돌린다.
+        // Since the real device's actual DataStore is shared, pageTurnMode is forced to a fixed value
+        // so jumpToOffset takes the page-mode path (jumpToPageAt) — if it's left in vertical-scroll
+        // mode, currentPage never updates at all and the test fails with a timeout. Restored to its
+        // original value when done.
         val originalPageTurnMode = runBlocking { settingsRepository.settingsFlow.first() }.pageTurnMode
         runBlocking { settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE) }
 
@@ -53,7 +55,7 @@ class JumpToFarOffsetTest {
             val halfway = fullText.length / 2
             val marker = "## 제5장"
             val targetOffset = fullText.indexOf(marker, startIndex = halfway)
-            check(targetOffset >= 0) { "테스트용 마커(\"$marker\")를 책 후반부에서 못 찾음 — 픽스처가 바뀌었을 수 있음" }
+            check(targetOffset >= 0) { "Couldn't find the test marker (\"$marker\") in the book's latter half — the fixture may have changed" }
 
             viewModel.jumpToOffset(targetOffset)
             waitUntilTrue { viewModel.uiState.value.currentPage?.startOffset ?: -1 >= halfway }
@@ -61,7 +63,7 @@ class JumpToFarOffsetTest {
             val page = viewModel.uiState.value.currentPage!!
             val pageText = fullText.substring(page.startOffset, page.endOffset)
             assertTrue(
-                "점프한 페이지에 목표 지점의 텍스트(\"$marker\")가 보여야 함",
+                "The page jumped to should show the text at the target point (\"$marker\")",
                 pageText.contains(marker),
             )
         } finally {

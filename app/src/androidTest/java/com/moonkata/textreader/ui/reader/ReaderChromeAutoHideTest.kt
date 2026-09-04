@@ -27,10 +27,12 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * 상하단바(showChrome)의 실제 원하는 동작을 검증한다:
- * 1. 파일을 열면 로딩 중엔 상하단바가 보이다가, 로딩이 끝나면 탭 없이 자동으로 사라진다.
- * 2. 화면 위쪽 30%를 탭하면 다시 나타나고, 그 상태에서 뷰어 영역(위쪽 30% 아래)을 탭하면 다시
- *    사라진다 — 이 탭은 페이지를 넘기지 않고 오직 상하단바만 닫는다.
+ * Verifies the actual intended behavior of the top/bottom bars (showChrome):
+ * 1. When a file is opened, the bars are visible while loading, then disappear automatically
+ *    once loading finishes, with no tap needed.
+ * 2. Tapping the top 30% of the screen brings them back, and from there tapping the viewer area
+ *    (below the top 30%) hides them again — that tap only closes the bars and must not turn
+ *    the page.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderChromeAutoHideTest {
@@ -69,27 +71,29 @@ class ReaderChromeAutoHideTest {
                 }
             }
 
-            // 1. 로딩이 끝나(첫 문단이 보이기 시작하면) 탭 없이도 상하단바가 저절로 사라져야 한다.
+            // 1. Once loading finishes (the first paragraph starts showing), the top/bottom bars
+            //    must disappear on their own, with no tap.
             composeTestRule.waitUntil(timeoutMillis = 10_000) {
                 composeTestRule.onAllNodesWithText(firstParagraphMarker, substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
 
-            // 2. 위쪽 30% 탭 → 상하단바가 다시 나타나야 한다.
+            // 2. Tap the top 30% -> the bars must reappear.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.5f, height * 0.1f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isNotEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isNotEmpty()
             }
 
-            // 3. 그 상태에서 뷰어 영역(위쪽 30% 아래)을 탭 → 상하단바만 사라지고, 페이지는 안 넘어가야 한다.
+            // 3. From there, tap the viewer area (below the top 30%) -> only the bars should
+            //    disappear, and the page must not turn.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.75f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
-                "상하단바를 닫는 탭은 페이지를 넘기면 안 되므로 첫 문단이 여전히 화면에 있어야 함",
+                "The tap that closes the bars must not turn the page, so the first paragraph should still be on screen",
                 composeTestRule.onAllNodesWithText(firstParagraphMarker, substring = true).fetchSemanticsNodes().isNotEmpty(),
             )
         } finally {

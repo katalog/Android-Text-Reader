@@ -21,12 +21,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 검색 시트의 핵심 계약 회귀 테스트:
- * 1. 타이핑만으로는 검색이 실행되지 않고, 제출(버튼/키보드 검색 액션)해야만 실행된다.
- * 2. 시트를 다시 열었을 때 마지막 검색어/결과를 그대로 보여주고, 그걸로 다시 검색을 트리거하지 않는다.
- * 3. 지금 읽고 있는 위치와 가장 가까운 결과가 수동 스크롤 없이 바로 보인다.
- * 4. 시트를 열면 커서가 항상 검색어 맨 끝에 있다(기존 검색어가 없으면 자연히 맨 앞과 같음) — 다시
- *    열자마자 백스페이스로 기존 검색어를 지울 수 있어야 한다는 요구사항의 회귀 테스트.
+ * Regression tests for the search sheet's core contract:
+ * 1. Typing alone does not trigger a search — only submitting (button or keyboard search action)
+ *    does.
+ * 2. Reopening the sheet shows the last query/results as-is, without triggering a re-search.
+ * 3. The result nearest to the current reading position is visible immediately, without manual
+ *    scrolling.
+ * 4. Opening the sheet always places the cursor at the very end of the query (naturally the same
+ *    as the very start when there's no existing query) — a regression test for the requirement
+ *    that backspace should be able to delete the existing query immediately after reopening.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -54,14 +57,14 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("본문 검색").performTextInput("테스트")
+        composeTestRule.onNodeWithText("Search text").performTextInput("테스트")
         composeTestRule.waitForIdle()
-        assertEquals("타이핑만으로는 검색이 실행되면 안 됨", 0, searchCallCount)
+        assertEquals("Typing alone must not trigger a search", 0, searchCallCount)
 
-        composeTestRule.onNodeWithContentDescription("검색").performClick()
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
         composeTestRule.waitForIdle()
 
-        assertEquals("검색 버튼을 누르면 정확히 한 번 실행돼야 함", 1, searchCallCount)
+        assertEquals("Tapping the search button should trigger exactly one search", 1, searchCallCount)
         composeTestRule.onNodeWithText("찾은 결과 스니펫").assertExists()
     }
 
@@ -84,8 +87,8 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("본문 검색").performTextInput("테스트")
-        composeTestRule.onNodeWithText("본문 검색").performImeAction()
+        composeTestRule.onNodeWithText("Search text").performTextInput("테스트")
+        composeTestRule.onNodeWithText("Search text").performImeAction()
         composeTestRule.waitForIdle()
 
         assertEquals(1, searchCallCount)
@@ -113,7 +116,7 @@ class SearchSheetTest {
 
         composeTestRule.onNodeWithText("이전검색어").assertExists()
         composeTestRule.onNodeWithText("이전 검색 결과").assertExists()
-        assertEquals("검색 시트를 다시 열었을 때 자동으로 재검색하면 안 됨", 0, searchCallCount)
+        assertEquals("Reopening the search sheet must not automatically re-run the search", 0, searchCallCount)
     }
 
     @Test
@@ -154,7 +157,7 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        val selection = composeTestRule.onNodeWithText("본문 검색")
+        val selection = composeTestRule.onNodeWithText("Search text")
             .fetchSemanticsNode()
             .config[SemanticsProperties.TextSelectionRange]
 
@@ -204,8 +207,9 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        // 시트가 열리자마자(추가로 탭/클릭해서 초점을 옮기지 않고) 곧바로 백스페이스만 눌러도
-        // 마지막 글자가 지워져야 한다 — 커서가 이미 맨 끝에 있다는 걸 실제 동작으로 증명한다.
+        // As soon as the sheet opens (with no extra tap/click to move focus), pressing backspace
+        // alone should delete the last character — proving via actual behavior that the cursor is
+        // already at the very end.
         composeTestRule.onNodeWithText(existingQuery).performKeyInput { pressKey(Key.Backspace) }
         composeTestRule.waitForIdle()
 

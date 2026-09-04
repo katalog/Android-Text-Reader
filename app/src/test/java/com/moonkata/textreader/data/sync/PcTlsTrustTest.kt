@@ -6,9 +6,9 @@ import org.junit.Test
 import java.security.MessageDigest
 import java.security.cert.Certificate
 
-/** [createLenientSslContext]/[createPinnedSslContext]는 실제 TLS 핸드셰이크(androidTest 쪽
- * [com.moonkata.textreader.data.sync.PcSyncClientTest]에서 검증)로 감싸져 있어 여기서는 그 신뢰
- * 판단이 실제로 기대는 순수 로직인 [sha256Fingerprint]만 다룬다. */
+/** [createLenientSslContext]/[createPinnedSslContext] are wrapped around an actual TLS handshake
+ * (verified on the androidTest side in [com.moonkata.textreader.data.sync.PcSyncClientTest]), so
+ * here we only cover [sha256Fingerprint] — the pure logic that trust decision actually relies on. */
 class PcTlsTrustTest {
 
     private class FakeCertificate(private val bytes: ByteArray) : Certificate("fake") {

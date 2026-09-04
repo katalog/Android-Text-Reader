@@ -25,9 +25,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 설정 시트에서 값을 바꾸면 화면(uiState)에 반영되고, 실제로 DataStore에도 저장되는지 검증한다.
- * ReaderViewModel이 프로덕션 DataStore를 그대로 쓰므로, 시작 전 원래 값을 기억해뒀다가 끝나면
- * 복원해 실기기의 실제 설정을 테스트가 영구히 바꿔버리지 않게 한다.
+ * Verifies that changing a value in the settings sheet is reflected in the screen (uiState) and
+ * actually persisted to DataStore too. Since ReaderViewModel uses the production DataStore directly,
+ * the original values are remembered before starting and restored afterward so the test doesn't
+ * permanently change the real device's settings.
  */
 @RunWith(AndroidJUnit4::class)
 class QuickSettingsSheetTest {
@@ -60,14 +61,14 @@ class QuickSettingsSheetTest {
             PageTransitionAnimation.COVER -> PageTransitionAnimation.NONE
         }
         val themeLabel = mapOf(
-            ThemePreset.LIGHT to "라이트",
-            ThemePreset.DARK to "다크",
-            ThemePreset.SEPIA to "세피아",
+            ThemePreset.LIGHT to "Light",
+            ThemePreset.DARK to "Dark",
+            ThemePreset.SEPIA to "Sepia",
         ).getValue(targetTheme)
         val transitionLabel = mapOf(
-            PageTransitionAnimation.NONE to "없음",
-            PageTransitionAnimation.SLIDE to "슬라이드",
-            PageTransitionAnimation.COVER to "덮기",
+            PageTransitionAnimation.NONE to "None",
+            PageTransitionAnimation.SLIDE to "Slide",
+            PageTransitionAnimation.COVER to "Cover",
         ).getValue(targetTransition)
 
         try {
@@ -81,11 +82,11 @@ class QuickSettingsSheetTest {
             }
             composeTestRule.waitForIdle()
 
-            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "크기 증가" else "크기 감소"
+            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "Increase Size" else "Decrease Size"
             composeTestRule.onNodeWithContentDescription(fontSizeButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.fontSizeSp == targetFontSize }
 
-            val marginButtonDescription = if (targetMargin > originalSettings.marginHorizontalDp) "좌우 증가" else "좌우 감소"
+            val marginButtonDescription = if (targetMargin > originalSettings.marginHorizontalDp) "Increase Left/right" else "Decrease Left/right"
             composeTestRule.onNodeWithContentDescription(marginButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.marginHorizontalDp == targetMargin }
 
@@ -96,10 +97,10 @@ class QuickSettingsSheetTest {
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.pageTransitionAnimation == targetTransition }
 
             val persisted = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
-            assertEquals("폰트 크기 변경이 DataStore에 저장돼야 함", targetFontSize, persisted.fontSizeSp)
-            assertEquals("여백 변경이 DataStore에 저장돼야 함", targetMargin, persisted.marginHorizontalDp)
-            assertEquals("테마 변경이 DataStore에 저장돼야 함", targetTheme, persisted.themePreset)
-            assertEquals("전환 애니메이션 변경이 DataStore에 저장돼야 함", targetTransition, persisted.pageTransitionAnimation)
+            assertEquals("Font size change should be persisted to DataStore", targetFontSize, persisted.fontSizeSp)
+            assertEquals("Margin change should be persisted to DataStore", targetMargin, persisted.marginHorizontalDp)
+            assertEquals("Theme change should be persisted to DataStore", targetTheme, persisted.themePreset)
+            assertEquals("Transition animation change should be persisted to DataStore", targetTransition, persisted.pageTransitionAnimation)
         } finally {
             runBlocking {
                 viewModel.settingsRepository.updateFontSizeSp(originalSettings.fontSizeSp)

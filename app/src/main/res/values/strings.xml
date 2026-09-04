@@ -1,3 +1,157 @@
 <resources>
-    <string name="app_name">문카타 리더</string>
+    <string name="app_name">Moonkata Reader</string>
+
+    <!-- Library screen -->
+    <string name="library_default_title">My Library</string>
+    <string name="library_up_folder_desc">Parent folder</string>
+    <string name="library_pc_sync_desc">PC file sync settings</string>
+    <string name="library_sort_desc">Sort</string>
+    <string name="library_settings_desc">Settings</string>
+    <string name="library_add_folder">Add folder</string>
+    <string name="library_change_folder">Change folder</string>
+    <string name="library_no_folder_added">Add a folder to load your .txt novels</string>
+    <string name="library_no_txt_zip_files">This folder has no txt/zip files</string>
+    <string name="library_percent_read">%1$.3f%% read</string>
+    <string name="library_unread">Unread</string>
+    <string name="library_resume_reading_title">Resume reading</string>
+    <string name="library_resume_reading_message">Continue \"%1$s\"?</string>
+    <string name="library_resume_reading_confirm">Continue</string>
+    <string name="library_resume_reading_dismiss">Not now</string>
+    <string name="library_pc_sync_secret_empty">Host or secret is empty</string>
+    <string name="library_pc_sync_qr_payload_empty">QR payload has an empty field</string>
+    <string name="library_pc_sync_select_folder_first">Select a library folder first</string>
+    <string name="library_pc_sync_test_connection_first">Run the connection test first</string>
+    <string name="library_pc_sync_cannot_connect">Can\'t connect to the PC</string>
+    <string name="library_supabase_secret_empty">Secret is empty</string>
+    <string name="sort_name_asc">Name (A–Z)</string>
+    <string name="sort_name_desc">Name (Z–A)</string>
+    <string name="sort_date_desc">Recently modified</string>
+    <string name="sort_date_asc">Oldest modified</string>
+    <string name="sort_size_desc">Largest first</string>
+    <string name="sort_size_asc">Smallest first</string>
+
+    <!-- QR scanner -->
+    <string name="qr_align_hint">Align the QR code in the center of the screen</string>
+    <string name="qr_close_desc">Close</string>
+
+    <!-- Chapter pattern sheet -->
+    <string name="chapter_pattern_title">Chapter detection patterns</string>
+    <string name="chapter_pattern_description">A line is recognized as a chapter title if it fully matches any of the patterns below.</string>
+    <string name="chapter_pattern_example_prefix">e.g. %1$s</string>
+    <string name="chapter_pattern_custom_title">Add a custom pattern</string>
+    <string name="chapter_pattern_custom_placeholder" translatable="false">e.g. ^Vol\\.\\s*\\d+</string>
+    <string name="chapter_pattern_add_desc">Add</string>
+    <string name="chapter_pattern_invalid_regex">That\'s not a valid regular expression</string>
+    <string name="chapter_pattern_delete_desc">Delete</string>
+    <string name="chapter_pattern_preset_hash_label">Starts with ##</string>
+    <string name="chapter_pattern_preset_hash_example">## Chapter 1: An Utterly Ordinary Beginning</string>
+
+    <!-- Quick settings sheet -->
+    <string name="settings_section_font">Font</string>
+    <string name="settings_font_size">Size</string>
+    <string name="settings_line_height">Line height</string>
+    <string name="settings_letter_spacing">Letter spacing</string>
+    <string name="settings_font_picker_button">Choose / download font</string>
+    <string name="settings_section_margins">Margins</string>
+    <string name="settings_margin_horizontal">Left/right</string>
+    <string name="settings_margin_top">Top</string>
+    <string name="settings_margin_bottom">Bottom</string>
+    <string name="settings_section_theme">Theme</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_sepia">Sepia</string>
+    <string name="settings_section_page_turn_mode">Page-turn mode</string>
+    <string name="settings_page_turn_paged">Page turn</string>
+    <string name="settings_page_turn_scroll">Scroll</string>
+    <string name="settings_section_transition_animation">Transition animation</string>
+    <string name="settings_transition_none">None</string>
+    <string name="settings_transition_slide">Slide</string>
+    <string name="settings_transition_cover">Cover</string>
+    <string name="settings_section_page_turn_options">Page-turn options</string>
+    <string name="settings_touch_zones">Touch (left/right tap)</string>
+    <string name="settings_touch_standard">Left = previous · Right = next</string>
+    <string name="settings_touch_both_next">Both sides = next</string>
+    <string name="settings_swipe">Swipe (left/right)</string>
+    <string name="settings_swipe_standard">← Next · → Previous</string>
+    <string name="settings_swipe_both_next">Both directions = next</string>
+    <string name="settings_section_line_break">Line breaks</string>
+    <string name="settings_line_break_preserve">Keep original</string>
+    <string name="settings_line_break_reflow">Reflow into paragraphs</string>
+    <string name="settings_section_chapter_jump">Chapter jump</string>
+    <string name="settings_chapter_jump_enabled">On</string>
+    <string name="settings_chapter_jump_divisions">Divisions</string>
+    <string name="settings_chapter_pattern_button">Chapter detection patterns</string>
+    <string name="settings_section_screen">Screen</string>
+    <string name="settings_keep_screen_on">Keep screen on</string>
+    <string name="settings_volume_key_paging">Page with volume keys</string>
+    <string name="settings_brightness_override">Manual brightness</string>
+    <string name="settings_brightness">Brightness</string>
+    <string name="settings_orientation">Screen orientation</string>
+    <string name="settings_orientation_auto">Auto</string>
+    <string name="settings_orientation_portrait">Portrait</string>
+    <string name="settings_orientation_landscape">Landscape</string>
+    <string name="settings_section_auto_advance">Auto-advance / TTS</string>
+    <string name="settings_auto_advance_off">Off</string>
+    <string name="settings_auto_advance_timer">Timer</string>
+    <string name="settings_auto_advance_tts">TTS</string>
+    <string name="settings_auto_advance_interval">%1$d sec</string>
+    <string name="settings_auto_advance_interval_label">Interval</string>
+    <string name="settings_section_vscode_sync">VSCode reading-position sync</string>
+    <string name="settings_vscode_sync_description">Scan the QR code from VSCode\'s \"Moonkata Sync: Connect via QR\", or paste the shared secret directly and press \"Test connection\".</string>
+    <string name="settings_connect_via_qr">Connect via QR</string>
+    <string name="settings_shared_secret">Shared secret</string>
+    <string name="settings_test_connection">Test connection</string>
+    <string name="settings_connected">Connected</string>
+    <string name="settings_connection_failed">Connection failed — %1$s</string>
+    <string name="settings_check_secret">Check the secret</string>
+    <string name="settings_stepper_decrease_desc">Decrease %1$s</string>
+    <string name="settings_stepper_increase_desc">Increase %1$s</string>
+
+    <!-- Font picker sheet -->
+    <string name="font_picker_title">Font</string>
+    <string name="font_picker_system_default">System default</string>
+    <string name="font_picker_download_desc">Download</string>
+
+    <!-- Reader screen -->
+    <string name="reader_back_desc">Back</string>
+    <string name="reader_settings_desc">Settings</string>
+    <string name="reader_toc_desc">Table of contents</string>
+    <string name="reader_search_desc">Search</string>
+    <string name="reader_chapter_jump_on">Chapter jump ON</string>
+    <string name="reader_chapter_jump">Chapter jump</string>
+    <string name="reader_external_position_title">Another device has read further</string>
+    <string name="reader_external_position_message">You\'re at %1$.1f%% — another device has reached %2$.1f%%. Jump to that spot?</string>
+    <string name="reader_external_position_confirm">Jump</string>
+    <string name="reader_external_position_dismiss">Not now</string>
+
+    <!-- Search sheet -->
+    <string name="search_field_label">Search text</string>
+    <string name="search_desc">Search</string>
+
+    <!-- Table of contents sheet -->
+    <string name="toc_empty">No table of contents found</string>
+
+    <!-- PC file sync sheet -->
+    <string name="pc_sync_title">PC file sync</string>
+    <string name="pc_sync_description">Scan \"Show sync QR\" from the PC tray menu to fill in the address and secret and connect instantly. If you can\'t use the camera, find a PC below or enter it manually.</string>
+    <string name="pc_sync_connect_via_qr">Connect via QR</string>
+    <string name="pc_sync_host_label">PC address (computer name or IP)</string>
+    <string name="pc_sync_find_pc">Find PC</string>
+    <string name="pc_sync_none_found">No PC server found on this network — check that moonkata-sync-server is running, or enter the address manually.</string>
+    <string name="pc_sync_shared_secret">Shared secret</string>
+    <string name="pc_sync_secret_hint">Paste the value shown in the moonkata-sync-server window on your PC</string>
+    <string name="pc_sync_test_connection">Test connection</string>
+    <string name="pc_sync_connected">Connected</string>
+    <string name="pc_sync_connection_failed">Connection failed — %1$s</string>
+    <string name="pc_sync_check_host_secret">Check the address/secret</string>
+    <string name="pc_sync_now">Sync now</string>
+    <string name="pc_sync_test_first">Pass the connection test first to sync.</string>
+    <string name="pc_sync_progress">%1$d / %2$d — %3$s</string>
+    <string name="pc_sync_result">Downloaded %1$d · Updated %2$d · Deleted %3$d</string>
+    <string name="pc_sync_result_failed_suffix"> · Failed %1$d</string>
+    <string name="pc_sync_close">Close</string>
+
+    <!-- Misc data-layer fallback strings -->
+    <string name="folder_root_fallback_name">Root</string>
+    <string name="font_download_failed_fallback">Download failed</string>
 </resources>

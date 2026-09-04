@@ -25,9 +25,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `QuickSettingsSheetTest`는 폰트/여백/테마/전환 애니메이션만 다루는데, 시트에는 그 외에도 실제
- * 사용자 시나리오(USER_SCENARIOS.md §11)로 문서화된 토글이 세 개 더 있다 — 읽기 모드 전환, 줄바꿈
- * 정리 모드, 화면 꺼짐 방지. 지금까지 자동화 테스트가 하나도 없던 경로라 여기서 따로 겨냥한다.
+ * `QuickSettingsSheetTest` only covers font/margins/theme/transition animation, but the sheet also
+ * has three more toggles documented as real user scenarios (USER_SCENARIOS.md §11) — reading mode
+ * switching, line-break reflow mode, and keep-screen-on. These paths had zero automated tests
+ * until now, so they're targeted separately here.
  */
 @RunWith(AndroidJUnit4::class)
 class QuickSettingsSheetModeTogglesTest {
@@ -48,9 +49,9 @@ class QuickSettingsSheetModeTogglesTest {
         val originalSettings = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
 
         val targetPageTurnMode = if (originalSettings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) PageTurnMode.VERTICAL_SCROLL else PageTurnMode.HORIZONTAL_PAGE
-        val pageTurnLabel = if (targetPageTurnMode == PageTurnMode.HORIZONTAL_PAGE) "페이지 넘김" else "스크롤"
+        val pageTurnLabel = if (targetPageTurnMode == PageTurnMode.HORIZONTAL_PAGE) "Page turn" else "Scroll"
         val targetLineBreakMode = if (originalSettings.lineBreakMode == LineBreakMode.PRESERVE) LineBreakMode.REFLOW else LineBreakMode.PRESERVE
-        val lineBreakLabel = if (targetLineBreakMode == LineBreakMode.PRESERVE) "원문 유지" else "문단 재구성"
+        val lineBreakLabel = if (targetLineBreakMode == LineBreakMode.PRESERVE) "Keep original" else "Reflow into paragraphs"
         val targetKeepScreenOn = !originalSettings.keepScreenOnEnabled
         val targetOrientationLock = when (originalSettings.orientationLock) {
             OrientationLock.AUTO -> OrientationLock.PORTRAIT
@@ -58,9 +59,9 @@ class QuickSettingsSheetModeTogglesTest {
             OrientationLock.LANDSCAPE -> OrientationLock.AUTO
         }
         val orientationLabel = mapOf(
-            OrientationLock.AUTO to "자동",
-            OrientationLock.PORTRAIT to "세로",
-            OrientationLock.LANDSCAPE to "가로",
+            OrientationLock.AUTO to "Auto",
+            OrientationLock.PORTRAIT to "Portrait",
+            OrientationLock.LANDSCAPE to "Landscape",
         ).getValue(targetOrientationLock)
 
         try {
@@ -80,17 +81,17 @@ class QuickSettingsSheetModeTogglesTest {
             composeTestRule.onNodeWithText(lineBreakLabel).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.lineBreakMode == targetLineBreakMode }
 
-            composeTestRule.onNodeWithText("화면 꺼짐 방지").performScrollTo().performClick()
+            composeTestRule.onNodeWithText("Keep screen on").performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.keepScreenOnEnabled == targetKeepScreenOn }
 
             composeTestRule.onNodeWithText(orientationLabel).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.orientationLock == targetOrientationLock }
 
             val persisted = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
-            assertEquals("읽기 모드 전환이 DataStore에 저장돼야 함", targetPageTurnMode, persisted.pageTurnMode)
-            assertEquals("줄바꿈 정리 모드 변경이 DataStore에 저장돼야 함", targetLineBreakMode, persisted.lineBreakMode)
-            assertEquals("화면 꺼짐 방지 토글이 DataStore에 저장돼야 함", targetKeepScreenOn, persisted.keepScreenOnEnabled)
-            assertEquals("화면 방향 고정이 DataStore에 저장돼야 함", targetOrientationLock, persisted.orientationLock)
+            assertEquals("Reading mode switch must be persisted to DataStore", targetPageTurnMode, persisted.pageTurnMode)
+            assertEquals("Line-break reflow mode change must be persisted to DataStore", targetLineBreakMode, persisted.lineBreakMode)
+            assertEquals("Keep-screen-on toggle must be persisted to DataStore", targetKeepScreenOn, persisted.keepScreenOnEnabled)
+            assertEquals("Orientation lock must be persisted to DataStore", targetOrientationLock, persisted.orientationLock)
         } finally {
             runBlocking {
                 viewModel.settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)

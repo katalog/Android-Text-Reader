@@ -1,8 +1,9 @@
 package com.moonkata.textreader.testutil
 
 /**
- * ComposeTestRule 없이(예: 화면 렌더링 없는 ReaderViewModel 단독 테스트) 비동기 상태 변화를 기다릴 때 쓰는
- * 단순 폴링 헬퍼. Compose 테스트 안에서는 이 대신 `composeTestRule.waitUntil`을 쓰면 된다.
+ * A simple polling helper for waiting on an async state change without a ComposeTestRule (e.g. a
+ * standalone ReaderViewModel test with no screen rendering). Inside a Compose test, use
+ * `composeTestRule.waitUntil` instead.
  */
 fun waitUntilTrue(timeoutMs: Long = 5_000, intervalMs: Long = 50, condition: () -> Boolean) {
     val deadline = System.currentTimeMillis() + timeoutMs
@@ -10,5 +11,5 @@ fun waitUntilTrue(timeoutMs: Long = 5_000, intervalMs: Long = 50, condition: () 
         if (condition()) return
         Thread.sleep(intervalMs)
     }
-    check(condition()) { "조건이 ${timeoutMs}ms 안에 충족되지 않음" }
+    check(condition()) { "Condition was not satisfied within ${timeoutMs}ms" }
 }

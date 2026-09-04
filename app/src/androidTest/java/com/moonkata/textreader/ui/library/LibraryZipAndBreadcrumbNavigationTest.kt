@@ -29,11 +29,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * USER_SCENARIOS.md §1의 7·8번(zip 진입, 브레드크럼 복귀)은 지금까지 자동화된 테스트가 없었다 —
- * [LibraryFolderBrowseScenarioTest]는 평범한 폴더 진입만 다룬다. zip 안 파일은 실제로 열어보는
- * 부분까지 확인하려고 진짜 zip 파일을 씀(목록 자체는 [FakeFolderBrowser]로 흉내내지만, 실제 파일
- * 내용을 읽는 `BookContentReader`는 폴더 탐색기를 거치지 않고 URI로 직접 열기 때문에 진짜 zip이면
- * 실제 데이터 흐름을 그대로 검증할 수 있다).
+ * Items 7 and 8 of USER_SCENARIOS.md §1 (entering a zip, returning via breadcrumb) had no
+ * automated tests until now — [LibraryFolderBrowseScenarioTest] only covers plain folder entry.
+ * Uses a real zip file so that opening a file inside the zip can actually be verified (the listing
+ * itself is faked via [FakeFolderBrowser], but `BookContentReader`, which reads the actual file
+ * content, opens directly by URI rather than going through the folder browser, so a real zip lets
+ * the real data flow be verified as-is).
  */
 @RunWith(AndroidJUnit4::class)
 class LibraryZipAndBreadcrumbNavigationTest {
@@ -98,22 +99,22 @@ class LibraryZipAndBreadcrumbNavigationTest {
         composeTestRule.runOnUiThread { viewModel.onRootFolderSelected(fakeRoot) }
         composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.entries.isNotEmpty() }
 
-        // 1) 폴더 진입
+        // 1) Enter the folder
         composeTestRule.onNodeWithText("시리즈").performClick()
         composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.entries.any { it.name == "archive.zip" } }
 
-        // 2) zip 진입 — listZipEntries 경로를 타야 함
+        // 2) Enter the zip — must go through the listZipEntries path
         composeTestRule.onNodeWithText("archive.zip").performClick()
         composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.entries.any { it.name == "chapter1.txt" } }
 
-        // 3) zip 안 파일 열기 — 진짜 zip에서 진짜 내용을 읽어야 함
+        // 3) Open a file inside the zip — must read the real content from the real zip
         composeTestRule.onNodeWithText("chapter1.txt").performClick()
         composeTestRule.waitUntil(timeoutMillis = 5_000) { openedBookId != null }
 
         val readerViewModel = ReaderViewModel(application, openedBookId!!, bookRepository)
         waitUntilTrue(timeoutMs = 10_000) { readerViewModel.uiState.value.fullText.isNotEmpty() }
         assertTrue(
-            "zip 안 파일을 열면 실제 zip 엔트리 내용이 보여야 함",
+            "Opening a file inside a zip must show the real zip entry content",
             readerViewModel.uiState.value.fullText.contains("ZIP_MARKER_고유내용"),
         )
 
@@ -148,11 +149,11 @@ class LibraryZipAndBreadcrumbNavigationTest {
         composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.path.size == 2 }
         assertEquals("하위폴더", viewModel.uiState.value.path.last().name)
 
-        // 루트 브레드크럼(맨 처음 항목)을 눌러 한 번에 최상위로 복귀.
+        // Press the root breadcrumb (the very first item) to return to the top level in one step.
         composeTestRule.runOnUiThread { viewModel.navigateToBreadcrumb(0) }
         composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.path.size == 1 }
         assertNotNull(
-            "루트로 돌아오면 다시 하위폴더 항목이 보여야 함",
+            "Returning to the root must show the subfolder entry again",
             viewModel.uiState.value.entries.find { it.name == "하위폴더" },
         )
 

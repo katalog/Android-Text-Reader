@@ -38,20 +38,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.sync.QrPairingPayload
 import com.moonkata.textreader.ui.qr.QrScannerDialog
 import kotlinx.coroutines.launch
 
 /**
- * PC 트레이 서버 파일 동기화 연결 설정 — .docs/PC_SYNC_SERVER_PLAN.md §4. Supabase 공유 시크릿과
- * 완전히 같은 패턴(호스트 + 공유 시크릿, "테스트 성공 시점 값과 비교"로 검증 상태 판단) — 실제 계정
- * 자격증명은 필요 없다(SMB를 버리고 우리가 프로토콜을 직접 통제하는 방식으로 바뀌었기 때문).
+ * PC tray server file-sync connection settings — .docs/PC_SYNC_SERVER_PLAN.md §4. The exact same
+ * pattern as the Supabase shared secret (host + shared secret, verified state judged by "compare
+ * against the value at the moment the test last succeeded") — no real account credentials needed
+ * (since we dropped SMB for a protocol we control directly).
  *
- * 입력 필드는 QuickSettingsSheet의 Supabase 시크릿과 동일한 방식 — 매 키 입력마다 DataStore에 쓰지
- * 않고 로컬 초안 상태로만 들고 있다가, 시트가 닫히는 시점(onDismissRequest)에 한 번에 커밋한다.
+ * The input fields work the same way as the Supabase secret in QuickSettingsSheet — not written to
+ * DataStore on every keystroke, only held as local draft state, committed once at the point the sheet
+ * closes (onDismissRequest).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,23 +81,22 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
 
     ModalBottomSheet(onDismissRequest = dismissAndCommit, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text("PC 파일 동기화", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.pc_sync_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "PC 트레이 메뉴의 \"동기화 QR 보기\"를 스캔하면 주소·시크릿이 자동으로 채워지고 연결까지 " +
-                    "바로 끝납니다. 카메라를 쓸 수 없다면 아래에서 PC를 찾거나 직접 입력하세요.",
+                stringResource(R.string.pc_sync_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { showQrScanner = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("QR로 연결")
+                Text(stringResource(R.string.pc_sync_connect_via_qr))
             }
             Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = hostDraft,
                 onValueChange = { hostDraft = it; testFailed = false },
-                label = { Text("PC 주소 (컴퓨터 이름 또는 IP)") },
+                label = { Text(stringResource(R.string.pc_sync_host_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
@@ -112,13 +115,13 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                 if (scanning) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("PC 찾기")
+                    Text(stringResource(R.string.pc_sync_find_pc))
                 }
             }
             scanResults?.let { results ->
                 if (results.isEmpty()) {
                     Text(
-                        "같은 네트워크에서 PC 서버를 찾지 못했습니다 — moonkata-sync-server가 실행 중인지 확인하거나 주소를 직접 입력하세요.",
+                        stringResource(R.string.pc_sync_none_found),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -142,8 +145,8 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
             OutlinedTextField(
                 value = secretDraft,
                 onValueChange = { secretDraft = it; testFailed = false },
-                label = { Text("공유 시크릿") },
-                supportingText = { Text("PC의 moonkata-sync-server 창에 표시된 값을 그대로 붙여넣으세요") },
+                label = { Text(stringResource(R.string.pc_sync_shared_secret)) },
+                supportingText = { Text(stringResource(R.string.pc_sync_secret_hint)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -169,16 +172,16 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                     if (testing) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("연결 테스트")
+                        Text(stringResource(R.string.pc_sync_test_connection))
                     }
                 }
                 when {
                     isVerified -> {
                         Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2E7D32))
-                        Text("연결됨", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.pc_sync_connected), color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
                     }
                     testFailed -> Text(
-                        "연결 실패 — ${viewModel.lastPcSyncTestError() ?: "주소/시크릿을 확인하세요"}",
+                        stringResource(R.string.pc_sync_connection_failed, viewModel.lastPcSyncTestError() ?: stringResource(R.string.pc_sync_check_host_secret)),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -188,7 +191,7 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
-            Text("지금 동기화", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.pc_sync_now), style = MaterialTheme.typography.titleMedium)
             val syncState by viewModel.pcSyncState.collectAsState()
             Spacer(Modifier.height(8.dp))
             Button(
@@ -199,12 +202,12 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                 if (syncState.isSyncing) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("지금 동기화")
+                    Text(stringResource(R.string.pc_sync_now))
                 }
             }
             if (!isVerified) {
                 Text(
-                    "연결 테스트를 먼저 통과해야 동기화할 수 있습니다.",
+                    stringResource(R.string.pc_sync_test_first),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -217,7 +220,7 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "${progress.completed} / ${progress.total} — ${progress.currentRelativePath}",
+                    stringResource(R.string.pc_sync_progress, progress.completed, progress.total, progress.currentRelativePath),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     modifier = Modifier.padding(top = 4.dp),
@@ -225,8 +228,8 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
             }
             syncState.result?.let { result ->
                 Text(
-                    "받음 ${result.downloaded} · 갱신 ${result.updated} · 삭제 ${result.deleted}" +
-                        if (result.failed > 0) " · 실패 ${result.failed}" else "",
+                    stringResource(R.string.pc_sync_result, result.downloaded, result.updated, result.deleted) +
+                        if (result.failed > 0) stringResource(R.string.pc_sync_result_failed_suffix, result.failed) else "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (result.failed > 0) MaterialTheme.colorScheme.error else Color(0xFF2E7D32),
                     modifier = Modifier.padding(top = 8.dp),
@@ -243,15 +246,16 @@ fun PcSyncSheet(viewModel: LibraryViewModel, settings: ReaderSettings, onDismiss
 
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = dismissAndCommit, modifier = Modifier.fillMaxWidth()) {
-                Text("닫기")
+                Text(stringResource(R.string.pc_sync_close))
             }
         }
     }
 
     if (showQrScanner) {
-        // QR 스캔 성공 시 호스트/시크릿을 채우고 바로 pinned TLS로 연결 테스트까지 자동 실행한다 —
-        // "PC 찾기" 서브넷 스캔과 시크릿 입력을 둘 다 건너뛴다(QR에 이미 다 있으므로). 잘못된
-        // QR/권한 거부는 QrScannerDialog가 onDismiss로 처리해 여기서는 아무 일도 안 한다.
+        // On a successful QR scan, fill in the host/secret and immediately auto-run the connection
+        // test with pinned TLS — this skips both the "Find PC" subnet scan and typing the secret
+        // (the QR already has everything). An invalid QR or denied permission is handled by
+        // QrScannerDialog itself via onDismiss, so nothing happens here in that case.
         QrScannerDialog(
             onResult = { payload ->
                 showQrScanner = false

@@ -17,9 +17,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 실제 인터넷(GitHub) 대신 로컬 가짜 HTTP 서버(MockWebServer)로 다운로드 성공/실패 경로를 검증한다.
- * cleartext(http://) 요청이 필요해 debug 소스셋의 network_security_config.xml에서 localhost/127.0.0.1만
- * 예외로 허용해뒀다(릴리스 빌드에는 영향 없음).
+ * Verifies the download success/failure paths against a local fake HTTP server (MockWebServer)
+ * instead of the real internet (GitHub). This requires cleartext (http://) requests, so the debug
+ * source set's network_security_config.xml allows an exception only for localhost/127.0.0.1 (no
+ * effect on release builds).
  */
 @RunWith(AndroidJUnit4::class)
 class FontDownloadManagerTest {
@@ -56,12 +57,12 @@ class FontDownloadManagerTest {
 
         val states = runBlocking { downloadManager.download(entry).toList() }
 
-        assertTrue("마지막 상태가 Downloaded여야 함", states.last() is FontDownloadState.Downloaded)
-        assertTrue("Downloading 진행률 상태가 최소 한 번은 있어야 함", states.any { it is FontDownloadState.Downloading })
+        assertTrue("The final state should be Downloaded", states.last() is FontDownloadState.Downloaded)
+        assertTrue("There should be at least one Downloading progress state", states.any { it is FontDownloadState.Downloading })
 
         val savedFile = downloadManager.localFile(entry)
-        assertTrue("다운로드한 파일이 실제로 저장돼야 함", savedFile.exists())
-        assertArrayEquals("저장된 내용이 서버가 보낸 바이트와 정확히 같아야 함", fontBytes, savedFile.readBytes())
+        assertTrue("The downloaded file should actually be saved", savedFile.exists())
+        assertArrayEquals("The saved content should exactly match the bytes the server sent", fontBytes, savedFile.readBytes())
         assertTrue(downloadManager.isDownloaded(entry))
     }
 
@@ -72,7 +73,7 @@ class FontDownloadManagerTest {
 
         val states = runBlocking { downloadManager.download(entry).toList() }
 
-        assertTrue("실패하면 Failed 상태로 끝나야 함", states.last() is FontDownloadState.Failed)
-        assertFalse("실패한 다운로드는 최종 파일을 남기면 안 됨", downloadManager.localFile(entry).exists())
+        assertTrue("On failure it should end in the Failed state", states.last() is FontDownloadState.Failed)
+        assertFalse("A failed download must not leave behind a final file", downloadManager.localFile(entry).exists())
     }
 }

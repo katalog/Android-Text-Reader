@@ -19,9 +19,9 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * `BookRepository`는 다른 여러 테스트에서 간접적으로만 exercise돼 왔다 — 여기서는 `findOrCreateBook`의
- * upsert 분기(신규/기존/relativePath 갱신)와, 실제 파일 I/O가 걸리는 `openBookContent`/`bookFileExists`를
- * 직접 겨냥한다.
+ * `BookRepository` has only ever been exercised indirectly across various other tests — here,
+ * `findOrCreateBook`'s upsert branches (new/existing/relativePath update) and
+ * `openBookContent`/`bookFileExists`, which involve real file I/O, are targeted directly.
  */
 @RunWith(AndroidJUnit4::class)
 class BookRepositoryTest {
@@ -74,7 +74,7 @@ class BookRepositoryTest {
 
         val idAfterMove = repository.findOrCreateBook(source, "책", sizeBytes = 100, relativePath = "folder/moved.txt")
 
-        assertEquals("id는 그대로 유지돼야 함(새로 만들면 안 됨)", id, idAfterMove)
+        assertEquals("The id must stay the same (must not create a new one)", id, idAfterMove)
         assertEquals("folder/moved.txt", repository.observeBook(id).first()?.relativePath)
     }
 
@@ -127,10 +127,10 @@ class BookRepositoryTest {
             repository.findOrCreateBook(BookSource.PlainTxt(Uri.fromFile(file)), file.name, sizeBytes = file.length()),
         ).first()!!
 
-        assertTrue("파일이 실제로 있으니 true여야 함", repository.bookFileExists(book))
+        assertTrue("Must be true since the file genuinely exists", repository.bookFileExists(book))
 
         file.delete()
 
-        assertFalse("파일이 삭제됐으니 false여야 함 — '이어서 읽기' 후보에서 빠지는 경로", repository.bookFileExists(book))
+        assertFalse("Must be false since the file was deleted — the path that drops it from 'continue reading' candidates", repository.bookFileExists(book))
     }
 }

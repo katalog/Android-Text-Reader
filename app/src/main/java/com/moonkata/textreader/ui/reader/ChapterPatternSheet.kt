@@ -40,8 +40,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.parser.ChapterPatternCatalog
 import com.moonkata.textreader.ui.SettingsController
@@ -58,26 +60,30 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
         onDismissRequest = onDismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
-        // LocalSoftwareKeyboardController는 이 시트 내부(별도 서브 컴포지션)에서 읽어야 실제로 포커스를
-        // 쥐고 있는 텍스트 필드에 작동한다 — ModalBottomSheet 바깥에서 읽으면 아무 효과가 없다.
+        // LocalSoftwareKeyboardController must be read inside this sheet (a separate sub-composition)
+        // to actually act on the text field that currently holds focus — reading it outside the
+        // ModalBottomSheet has no effect.
         val keyboardController = LocalSoftwareKeyboardController.current
         val focusManager = LocalFocusManager.current
 
-        // 뒤로가기가 아니라 스와이프로 내리거나 바깥을 탭해서 닫을 때는 포커스가 켜진 텍스트 필드가
-        // 정리 없이 그대로 컴포지션에서 사라진다 — 이러면 IME(및 그로 인한 하단 패딩)가 닫히지
-        // 않고 남아, 페이지 모드에서 그 높이만큼 본문이 가려진 채로 굳어버린다. 시트가 어떤 경로로든
-        // 사라질 때 포커스를 강제로 비워서 IME가 항상 정리되게 한다.
+        // When the sheet is dismissed by swiping down or tapping outside rather than the back button,
+        // a focused text field can disappear from the composition with no cleanup — that leaves the
+        // IME (and the bottom padding it causes) open, permanently obscuring that much of the body in
+        // page mode. Force-clear focus whenever the sheet leaves by any path so the IME always gets
+        // cleaned up.
         DisposableEffect(Unit) {
             onDispose { focusManager.clearFocus(force = true) }
         }
 
-        // 시트 자신의 뒤로가기 처리를 꺼서(shouldDismissOnBackPress = false), 뒤로가기를 우리가 직접 받는다 —
-        // 키보드가 떠 있으면 이번 뒤로가기는 키보드만 닫고, 다음 뒤로가기에 시트를 닫는다("완료"와 같은 동작).
+        // Turn off the sheet's own back-press handling (shouldDismissOnBackPress = false) so we
+        // handle back ourselves — while the keyboard is up, this back press only closes the keyboard;
+        // the next one closes the sheet (same behavior as a "done" button).
         BackHandler {
             if (fieldFocused) {
                 keyboardController?.hide()
-                // clearFocus()만으로는 포커스를 넘겨받을 다른 요소가 없어서 시스템이 곧바로 같은 필드에
-                // 포커스를 되돌려버린다 — 보이지 않는 더미 포커스 대상으로 포커스를 옮겨 이를 막는다.
+                // clearFocus() alone has nothing to hand focus off to, so the system immediately
+                // returns focus to the same field — move focus to an invisible dummy target instead
+                // to prevent that.
                 dummyFocusRequester.requestFocus()
             } else {
                 onDismiss()
@@ -91,10 +97,10 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
                     .focusRequester(dummyFocusRequester)
                     .focusable(),
             )
-            Text("챕터 인식 패턴", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.chapter_pattern_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "아래 패턴 중 하나라도 한 줄 전체와 일치하면 챕터 제목으로 인식합니다.",
+                stringResource(R.string.chapter_pattern_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -106,9 +112,9 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(preset.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(preset.labelRes), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "예: ${preset.example}",
+                            stringResource(R.string.chapter_pattern_example_prefix, stringResource(preset.exampleRes)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -121,13 +127,13 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
             }
 
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
-            Text("커스텀 정규식 추가", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.chapter_pattern_custom_title), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it; showError = false },
-                    placeholder = { Text("""예: ^Vol\.\s*\d+""") },
+                    placeholder = { Text(stringResource(R.string.chapter_pattern_custom_placeholder)) },
                     isError = showError,
                     singleLine = true,
                     modifier = Modifier.weight(1f).onFocusChanged { fieldFocused = it.isFocused },
@@ -139,12 +145,12 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
                         showError = true
                     }
                 }) {
-                    Icon(Icons.Default.Add, contentDescription = "추가")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chapter_pattern_add_desc))
                 }
             }
             if (showError) {
                 Text(
-                    "올바른 정규식이 아니에요",
+                    stringResource(R.string.chapter_pattern_invalid_regex),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -161,7 +167,7 @@ fun ChapterPatternSheet(viewModel: SettingsController, settings: ReaderSettings,
                         ) {
                             Text(pattern, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                             IconButton(onClick = { viewModel.removeCustomChapterPattern(pattern) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "삭제")
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.chapter_pattern_delete_desc))
                             }
                         }
                     }

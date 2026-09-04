@@ -11,10 +11,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * "폰트를 선택하면 실제로 다른 폰트가 적용되는지"의 핵심 계약: FontResolver는 로컬에 폰트 파일이
- * 있는지만 보고 커스텀 FontFamily/FontFamily.Default를 가른다 — 실제 다운로드 없이도 파일 유무만
- * 흉내내면 이 계약을 정확히 검증할 수 있다(파일 내용까지 유효한 폰트일 필요는 없음, FontResolver는
- * 내용을 검사하지 않으므로).
+ * The core contract of "does selecting a font actually apply a different font": FontResolver
+ * decides between a custom FontFamily and FontFamily.Default solely by whether the font file
+ * exists locally — so faking just the file's presence, without a real download, is enough to
+ * verify this contract precisely (the file content doesn't need to be a valid font, since
+ * FontResolver never inspects the content).
  */
 @RunWith(AndroidJUnit4::class)
 class FontResolverTest {
@@ -44,7 +45,7 @@ class FontResolverTest {
 
     @Test
     fun catalogEntryNotYetDownloaded_fallsBackToFontFamilyDefault() {
-        downloadManager.delete(entry) // 이전 테스트가 남긴 파일이 있으면 확실히 지운다
+        downloadManager.delete(entry) // Make sure any file left by a previous test is removed
 
         val resolved = FontResolver.resolve(application, entry.id)
 
@@ -60,6 +61,6 @@ class FontResolverTest {
 
         val resolved = FontResolver.resolve(application, entry.id)
 
-        assertNotSame("로컬 파일이 있으면 시스템 기본 폰트가 아닌 커스텀 폰트여야 함", FontFamily.Default, resolved)
+        assertNotSame("When a local file exists it should be a custom font, not the system default", FontFamily.Default, resolved)
     }
 }

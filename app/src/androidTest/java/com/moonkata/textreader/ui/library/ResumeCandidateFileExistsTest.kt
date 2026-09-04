@@ -21,10 +21,10 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * "이어서 읽기" 후보로 올리기 전에 실제 파일을 아직 열 수 있는지 확인하는 로직을 검증한다.
- * 확인 없이 후보로 올리면, 파일이 삭제/이동된 상태에서 "계속 보기"를 눌렀을 때
- * `BookContentReader.readBytes`가 던지는 `FileNotFoundException`을 잡는 곳이 없어 앱이 죽는다
- * (이번에 실제로 보고된 버그).
+ * Verifies the logic that checks whether the actual file can still be opened before offering it as a
+ * "resume reading" candidate. Without that check, if the file has been deleted/moved and the user taps
+ * "Continue", nothing catches the `FileNotFoundException` thrown by `BookContentReader.readBytes`, and
+ * the app crashes (a bug that was actually reported this time).
  */
 @RunWith(AndroidJUnit4::class)
 class ResumeCandidateFileExistsTest {
@@ -42,11 +42,11 @@ class ResumeCandidateFileExistsTest {
             }
             val book = runBlocking { testDb.bookDao().getById(bookId).first() }!!
 
-            assertTrue("실제로 존재하는 파일은 true여야 함", runBlocking { bookRepository.bookFileExists(book) })
+            assertTrue("A file that actually exists should be true", runBlocking { bookRepository.bookFileExists(book) })
 
             testFile.delete()
 
-            assertFalse("파일을 지운 뒤에는 false여야 함", runBlocking { bookRepository.bookFileExists(book) })
+            assertFalse("Should be false after the file is deleted", runBlocking { bookRepository.bookFileExists(book) })
         } finally {
             testFile.delete()
             testDb.close()
@@ -89,17 +89,18 @@ class ResumeCandidateFileExistsTest {
             val bookId = runBlocking {
                 bookRepository.findOrCreateBook(BookSource.PlainTxt(Uri.fromFile(testFile)), testFile.name, testFile.length())
             }
-            // "예전에 읽은 적 있음"으로 만들어야 이어서 읽기 후보 조건(lastOpenedAt != null)을 만족한다.
+            // Must be made to look "previously opened" to satisfy the resume-candidate condition (lastOpenedAt != null).
             runBlocking { bookRepository.updateReadPosition(bookId, offset = 10, progressPercent = 0.5f) }
-            testFile.delete() // 이제 이 책의 실제 파일은 없다.
+            testFile.delete() // Now this book's actual file is gone.
 
             val viewModel = LibraryViewModel(application, bookRepository, settingsRepository, FakeFolderBrowser(emptyMap()))
 
-            // 존재 확인은 로컬 파일 하나에 대한 확인이라 매우 빠르다 — 충분히 넉넉히(1.5초) 기다리는
-            // 동안 계속 폴링하며, 그 사이 단 한 번이라도 후보가 뜨면 바로 실패시킨다.
+            // Existence checking a single local file is very fast — poll continuously for a
+            // generously long window (1.5s), and fail immediately the moment a candidate shows up
+            // even once during that window.
             repeat(30) {
                 assertNull(
-                    "파일이 없는 책은 이어서 읽기 후보로 뜨면 안 됨(떴다면 \"계속 보기\"를 누를 때 크래시남)",
+                    "A book with no file should never be offered as a resume candidate (if it were, tapping \"Continue\" would crash)",
                     viewModel.resumeCandidate.value,
                 )
                 Thread.sleep(50)

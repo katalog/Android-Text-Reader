@@ -5,9 +5,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * ChapterDetector/ChapterPatternCatalog의 세부 분기(줄바꿈 처리, 길이 제한, 커스텀 정규식 오류 처리,
- * 오프셋 계산 등)를 합성 문자열로 검증한다. Android 의존성이 없어 일반 JUnit 테스트로 둔다 — 실제
- * 픽스처 소설로 하는 정탐/오탐 없음 검증은 androidTest의 ChapterDetectionRegressionTest 몫이다.
+ * Verifies detailed branches of ChapterDetector/ChapterPatternCatalog (line-break handling,
+ * length limits, custom regex error handling, offset calculation, etc.) using synthetic strings.
+ * Has no Android dependency, so this is a plain JUnit test — verifying true/false positives
+ * against real fixture novels is androidTest's ChapterDetectionRegressionTest's job.
  */
 class ChapterDetectorEdgeCaseTest {
 
@@ -43,7 +44,7 @@ class ChapterDetectorEdgeCaseTest {
 
     @Test
     fun linesLongerThan60Chars_areExcludedEvenIfPatternMatches() {
-        val tooLong = "## " + "가".repeat(60) // trim 후 63자 - 제한(60) 초과
+        val tooLong = "## " + "가".repeat(60) // 63 chars after trim - exceeds the limit (60)
         val text = "$tooLong\n## 짧은 챕터\n"
 
         val chapters = ChapterDetector.detect(text, hashPattern)
@@ -53,8 +54,9 @@ class ChapterDetectorEdgeCaseTest {
 
     @Test
     fun charOffsetPointsToTheRawLineStart_notTheTrimmedTitleStart() {
-        // "본문\n" 다음 줄이 앞에 공백이 있는 챕터 제목 — charOffset은 trim되기 전, 공백을 포함한
-        // 원래 줄의 시작 지점(=이전 줄바꿈 바로 다음)이어야 한다.
+        // The line after "본문\n" is a chapter title with leading whitespace — charOffset should
+        // point to the start of the raw line (including the whitespace) before trimming, i.e.
+        // right after the previous newline.
         val text = "본문\n   ## 앞에 공백 있는 챕터   \n"
 
         val chapters = ChapterDetector.detect(text, hashPattern)
@@ -70,7 +72,7 @@ class ChapterDetectorEdgeCaseTest {
             enabledIds = emptySet(),
             customPatterns = setOf("[invalid(regex", """^Chapter \d+$"""),
         )
-        assertEquals("잘못된 정규식은 조용히 걸러지고 유효한 것만 남아야 함", 1, patterns.size)
+        assertEquals("An invalid regex should be silently filtered out, leaving only valid ones", 1, patterns.size)
 
         val chapters = ChapterDetector.detect("Chapter 5\n본문\n", patterns)
         assertEquals(listOf("Chapter 5"), chapters.map { it.title })
@@ -85,7 +87,7 @@ class ChapterDetectorEdgeCaseTest {
 
         val chapters = ChapterDetector.detect("## Chapter 1\n본문\n", patterns)
 
-        assertEquals("두 패턴에 동시에 매칭되는 줄도 챕터 하나로만 잡혀야 함", 1, chapters.size)
+        assertEquals("A line matching both patterns at once should still be counted as a single chapter", 1, chapters.size)
     }
 
     @Test

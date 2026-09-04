@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- debug 소스셋 전용 — 릴리스 빌드에는 병합되지 않는다. FontDownloadManagerTest가 쓰는
-     MockWebServer(로컬 가짜 HTTP 서버)만 예외로 cleartext(http://)를 허용한다.
-     PC 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md)는 한때 이 파일을 전체 허용으로 넓혔었지만,
-     이후 PC 서버가 자체 서명 인증서로 HTTPS를 쓰도록 바뀌면서(§5, TOFU 방식 지문 고정) cleartext가
-     더는 필요 없어져 원래 범위로 되돌림. -->
+<!-- debug source set only — not merged into release builds. Allows cleartext (http://) only as an
+     exception for the MockWebServer (local fake HTTP server) that FontDownloadManagerTest uses.
+     PC file sync (.docs/PC_SYNC_SERVER_PLAN.md) once widened this file to allow everything, but
+     once the PC server switched to HTTPS with a self-signed certificate (§5, TOFU-style fingerprint
+     pinning), cleartext was no longer needed and this was reverted back to its original scope. -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">localhost</domain>

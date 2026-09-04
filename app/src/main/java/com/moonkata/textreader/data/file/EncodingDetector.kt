@@ -3,7 +3,7 @@ package com.moonkata.textreader.data.file
 import org.mozilla.universalchardet.UniversalDetector
 import java.nio.charset.Charset
 
-/** UTF-8 / EUC-KR(CP949) 등 한국어 txt 파일에서 흔한 인코딩을 자동 감지한다. */
+/** Auto-detects encodings commonly found in Korean txt files, such as UTF-8 / EUC-KR (CP949). */
 object EncodingDetector {
 
     fun detect(sampleBytes: ByteArray): Charset {

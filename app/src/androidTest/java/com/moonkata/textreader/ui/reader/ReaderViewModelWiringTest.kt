@@ -21,14 +21,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `ReaderViewModel`을 화면 렌더링 없이 직접 구동해 두 가지, 지금까지 테스트가 없던 배선을 확인한다
- * (USER_SCENARIOS.md §5, §14):
- * 1. 세로 스크롤 모드에서는 `next()`/`previous()`가 `Paginator` 계산이 아니라 `navEvents`로
- *    `RequestNextPage`/`RequestPreviousPage`(또는 챕터점프 모드면 `JumpToOffset`)를 방출해야 한다 —
- *    실제 스크롤은 `ReaderScrollContent`가 그 이벤트를 받아서 하므로, 뷰모델 쪽은 "올바른 이벤트를
- *    보내는지"까지만 이 레벨에서 검증 가능하다.
- * 2. `flushPendingPosition()`은 500ms 디바운스를 기다리지 않고 즉시 Room에 반영해야 한다(화면
- *    이탈/백그라운드 시점에 위치 유실을 막는 경로).
+ * Drives `ReaderViewModel` directly without rendering the screen, to verify two pieces of wiring
+ * that had no tests until now (USER_SCENARIOS.md §5, §14):
+ * 1. In vertical scroll mode, `next()`/`previous()` must emit `RequestNextPage`/
+ *    `RequestPreviousPage` (or `JumpToOffset` in chapter jump mode) via `navEvents`, rather than
+ *    computing via `Paginator` — the actual scrolling is done by `ReaderScrollContent` receiving
+ *    that event, so at this level the view model side can only be verified up to "does it send the
+ *    right event."
+ * 2. `flushPendingPosition()` must commit to Room immediately without waiting for the 500ms
+ *    debounce (the path that prevents position loss when leaving the screen/going to background).
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderViewModelWiringTest {
@@ -62,12 +63,14 @@ class ReaderViewModelWiringTest {
                 s.pageTurnMode == PageTurnMode.VERTICAL_SCROLL && !s.chapterJumpEnabled
             }
 
-            // navEvents는 replay가 없는 SharedFlow라, next()를 부르기 전에 구독이 이미 걸려 있어야
-            // 한다. CoroutineStart.UNDISPATCHED로 async를 시작하면 첫 suspend 지점(first()의 구독)
-            // 까지는 그 자리에서 동기적으로 실행되므로, 바로 다음 줄의 next() 호출 전에 구독이 확실히
-            // 걸려 있음이 보장된다 — waitUntilTrue(Thread.sleep 기반 폴링)를 같은 단일 스레드
-            // runBlocking 이벤트 루프 위에서 함께 쓰면, 그 sleep이 이 코루틴이 실행될 차례를 막아버려
-            // 영원히 이벤트를 못 받는 문제가 있었다(실제로 처음 겪은 실패 원인).
+            // navEvents is a SharedFlow with no replay, so the subscription must already be in
+            // place before next() is called. Starting the async with CoroutineStart.UNDISPATCHED
+            // runs it synchronously right there up to the first suspension point (the subscription
+            // inside first()), so the subscription is guaranteed to be in place before the next()
+            // call on the very next line — using waitUntilTrue (Thread.sleep-based polling)
+            // together on the same single-threaded runBlocking event loop caused that sleep to
+            // block this coroutine's turn to run, so the event was never received (this was the
+            // actual cause of the first failure encountered).
             val nextEventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.navEvents.first() }
             viewModel.next()
             assertEquals(ReaderNavEvent.RequestNextPage, withTimeout(5_000) { nextEventDeferred.await() })
@@ -106,7 +109,7 @@ class ReaderViewModelWiringTest {
             val nextEventDeferred = async(start = CoroutineStart.UNDISPATCHED) { viewModel.navEvents.first() }
             viewModel.next()
             val event = withTimeout(5_000) { nextEventDeferred.await() }
-            assertTrue("챕터점프 모드에서는 JumpToOffset이 나가야 함: $event", event is ReaderNavEvent.JumpToOffset)
+            assertTrue("JumpToOffset must be emitted in chapter jump mode: $event", event is ReaderNavEvent.JumpToOffset)
             event as ReaderNavEvent.JumpToOffset
             assertEquals(false, event.animate)
             assertEquals(event.offset, viewModel.uiState.value.currentOffset)
@@ -135,9 +138,10 @@ class ReaderViewModelWiringTest {
 
             val targetOffset = 4321
             viewModel.updateCurrentOffset(targetOffset)
-            // 디바운스(500ms)가 끝나기 훨씬 전에 강제로 flush — ON_STOP/화면 이탈 때와 같은 경로.
-            // flushPendingPosition 내부도 viewModelScope.launch라 비동기라, 실제 Room 반영을 기다린다
-            // (500ms 디바운스 타이머 자체보다 훨씬 짧게 끝나야 "즉시 반영"이라는 계약이 증명됨).
+            // Force a flush well before the debounce (500ms) would have finished — the same path
+            // as ON_STOP/leaving the screen. flushPendingPosition is also internally
+            // viewModelScope.launch, so it's async — wait for the actual Room write (it must finish
+            // much faster than the 500ms debounce timer itself to prove the "commits immediately" contract).
             viewModel.flushPendingPosition()
             waitUntilTrue(timeoutMs = 3_000) {
                 runBlocking { bookRepository.observeBook(bookId).first()?.lastReadCharOffset } == targetOffset
@@ -145,7 +149,7 @@ class ReaderViewModelWiringTest {
 
             val persisted = bookRepository.observeBook(bookId).first()
             assertEquals(
-                "flushPendingPosition은 디바운스를 기다리지 않고 즉시 Room에 반영해야 함",
+                "flushPendingPosition must commit to Room immediately, without waiting for the debounce",
                 targetOffset,
                 persisted?.lastReadCharOffset,
             )

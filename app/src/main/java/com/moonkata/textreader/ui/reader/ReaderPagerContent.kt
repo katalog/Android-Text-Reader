@@ -33,14 +33,15 @@ import com.moonkata.textreader.data.font.FontResolver
 import com.moonkata.textreader.data.parser.PaginationParams
 import com.moonkata.textreader.ui.theme.ReaderColors
 
-/** 챕터 점프 모드에서 챕터 인식 줄을 표시하는 하이라이트 색 — 리더 테마와 무관하게 늘 눈에 띄도록 고정값 사용. */
+/** Highlight color for lines detected as chapters in chapter jump mode — a fixed value so it always stands out regardless of the reader theme. */
 internal val ChapterHighlightColor = Color(0x664CAF50)
 
 /**
- * [text](baseOffset부터 시작) 안에서 chapterOffsets에 해당하는 줄에 하이라이트 배경을 입힌다.
- * 배경색만 바꾸고 글자 두께(bold)는 건드리지 않는다 — Paginator는 페이지를 나눌 때 이 굵기 변화를
- * 알지 못한 채 일반 굵기 기준으로 줄바꿈을 계산하므로, 여기서 bold를 적용하면 실제 렌더링 시 글자
- * 폭이 넓어져 마지막 줄이 페이지 밖으로 살짝 잘려 보이는 문제가 생긴다.
+ * Applies a highlight background to the lines corresponding to chapterOffsets within [text]
+ * (which starts at baseOffset). Only the background color is changed — font weight (bold) is left
+ * alone, because Paginator computes line breaks using the regular weight without knowing about this
+ * weight change when splitting pages; applying bold here would widen the glyphs at actual render time,
+ * causing the last line to appear slightly clipped past the page edge.
  */
 internal fun buildChapterHighlightedText(text: String, baseOffset: Int, chapterOffsets: Set<Int>): AnnotatedString {
     if (chapterOffsets.isEmpty()) return AnnotatedString(text)
@@ -56,9 +57,10 @@ internal fun buildChapterHighlightedText(text: String, baseOffset: Int, chapterO
 }
 
 /**
- * 책 전체 페이지 목록을 들고 있지 않는다 — 뷰모델이 "지금 보여줄 페이지 하나"([ReaderUiState.currentPage])만
- * 계산해서 넘겨주고, 여기서는 그걸 그대로 렌더링만 한다. 다음/이전/점프는 전부 뷰모델이 상태를 갈아끼우는
- * 것으로 처리되므로, Pager의 pageCount/인덱스를 비동기로 계속 동기화해야 하는 부담이 없다.
+ * Does not hold the full list of pages for the book — the view model computes and hands over only
+ * "the one page to show right now" ([ReaderUiState.currentPage]), and this composable just renders it
+ * as-is. Next/previous/jump are all handled by the view model swapping out that state, so there's no
+ * burden of keeping the Pager's pageCount/index continuously in sync asynchronously.
  */
 @Composable
 fun ReaderPagerContent(viewModel: ReaderViewModel, uiState: ReaderUiState, readerColors: ReaderColors) {
@@ -113,7 +115,7 @@ fun ReaderPagerContent(viewModel: ReaderViewModel, uiState: ReaderUiState, reade
                 targetState = currentPage,
                 label = "readerPage",
                 transitionSpec = {
-                    // 오프셋이 커지는 방향(다음)이면 오른쪽에서, 작아지는 방향(이전)이면 왼쪽에서 들어온다.
+                    // Enters from the right when the offset increases (next), from the left when it decreases (previous).
                     val forward = targetState.startOffset >= initialState.startOffset
                     when (settings.pageTransitionAnimation) {
                         PageTransitionAnimation.NONE -> EnterTransition.None togetherWith ExitTransition.None
@@ -122,7 +124,7 @@ fun ReaderPagerContent(viewModel: ReaderViewModel, uiState: ReaderUiState, reade
                         } else {
                             slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
                         }
-                        // 새 페이지가 옛 페이지 위로 덮으며 들어온다 — 옛 페이지는 그대로 있다가 덮여서 사라진다.
+                        // The new page slides in covering the old page — the old page stays put and disappears as it's covered.
                         PageTransitionAnimation.COVER -> ContentTransform(
                             targetContentEnter = if (forward) slideInHorizontally { width -> width } else slideInHorizontally { width -> -width },
                             initialContentExit = ExitTransition.None,
@@ -135,8 +137,8 @@ fun ReaderPagerContent(viewModel: ReaderViewModel, uiState: ReaderUiState, reade
                 val displayText = remember(text, page.startOffset, chapterOffsets) {
                     buildChapterHighlightedText(text, page.startOffset, chapterOffsets)
                 }
-                // 페이지 분량이 한 화면을 다 못 채울 때 세로 가운데로 배치되어 위쪽에 빈 여백이 생기는 걸
-                // 막기 위해 항상 맨 위·왼쪽에 붙인다.
+                // Always pin to the top-left to prevent the page content from being vertically centered
+                // (which would leave empty space at the top) when it doesn't fill the whole screen.
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
                     Text(
                         text = displayText,

@@ -9,9 +9,9 @@ data class FontCatalogEntry(
 )
 
 /**
- * 가독성 좋은 무료(오픈 라이선스) 한글 폰트 큐레이션 목록.
- * 다운로드 URL은 각 폰트 배포처(GitHub 등)가 바뀌면 깨질 수 있으므로,
- * 실제 배포 전에는 링크가 살아있는지 한 번 더 확인하는 것을 권장.
+ * A curated list of readable, free (open-license) Korean fonts.
+ * Download URLs can break if a font's distribution source (GitHub, etc.) changes, so it's
+ * recommended to double-check that links are still alive before an actual release.
  */
 object FontCatalog {
     const val SYSTEM_DEFAULT_ID = "system_default"
@@ -21,8 +21,9 @@ object FontCatalog {
             id = "nanum_gothic",
             displayName = "나눔고딕",
             license = "OFL-1.1",
-            // naver/nanumfont 저장소엔 "나눔고딕코딩"(고정폭) ZIP 릴리스만 있고 fonts/ 폴더 자체가
-            // 없어졌다 — 실제 나눔고딕/나눔명조는 Google Fonts 저장소에 있는 걸로 대체.
+            // The naver/nanumfont repo now only has a "NanumGothicCoding" (monospace) ZIP release, and
+            // the fonts/ folder itself is gone — using the actual NanumGothic/NanumMyeongjo from the
+            // Google Fonts repo instead.
             downloadUrl = "https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
             localFileName = "nanum_gothic.ttf",
         ),
@@ -44,8 +45,9 @@ object FontCatalog {
             id = "ridibatang",
             displayName = "리디바탕",
             license = "OFL-1.1",
-            // ridi/RIDIBatang 저장소 자체가 없어졌다(리디 쪽 저장소 정리로 추정) — 원문 라이선스
-            // 고지(OFL-1.1, 저작권 리디주식회사)를 그대로 유지해 미러링하는 fonts-archive로 대체.
+            // The ridi/RIDIBatang repo itself is gone (presumably RIDI cleaned up their repos) —
+            // using fonts-archive instead, which mirrors it while keeping the original license
+            // notice intact (OFL-1.1, copyright RIDI Corporation).
             downloadUrl = "https://raw.githubusercontent.com/fonts-archive/RIDIBatang/main/RIDIBatang.otf",
             localFileName = "ridibatang.otf",
         ),

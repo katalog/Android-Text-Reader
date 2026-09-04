@@ -26,10 +26,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * "폴더 선택 → txt 파일 목록 → 하나 선택 → 리더에서 실제 내용 확인"을 SAF/실제 시스템 폴더 선택창
- * 없이, 실제 소설 픽스처로 검증한다. [FakeFolderBrowser]가 폴더 목록을 대신하고, 선택된 파일 자체는
- * `androidTest/assets/books/`의 진짜 소설(file:// URI로 SAF 권한 없이도 읽힘)이라 리더까지 이어지는
- * 진짜 데이터 흐름을 그대로 탄다.
+ * Verifies "select folder → list of txt files → pick one → confirm real content in the reader" with a
+ * real novel fixture, without an SAF/real system folder picker. [FakeFolderBrowser] substitutes for
+ * the folder listing, and the selected file itself is a real novel from `androidTest/assets/books/`
+ * (readable via a file:// URI without SAF permission), so it rides the same real data flow all the way
+ * to the reader.
  */
 @RunWith(AndroidJUnit4::class)
 class LibraryFolderBrowseScenarioTest {
@@ -86,13 +87,13 @@ class LibraryFolderBrowseScenarioTest {
         composeTestRule.waitUntil(timeoutMillis = 5_000) { openedBookId != null }
 
         val bookId = openedBookId
-        assertNotNull("파일을 탭하면 onOpenBook이 호출되어야 함", bookId)
+        assertNotNull("onOpenBook should be called when the file is tapped", bookId)
 
         val readerViewModel = ReaderViewModel(application, bookId!!, bookRepository)
         waitUntilTrue(timeoutMs = 10_000) { readerViewModel.uiState.value.fullText.isNotEmpty() }
 
         assertTrue(
-            "리더가 읽은 본문이 실제 픽스처 소설 내용과 같아야 함",
+            "The text the reader loaded should match the actual fixture novel's content",
             readerViewModel.uiState.value.fullText.contains("제1장"),
         )
 

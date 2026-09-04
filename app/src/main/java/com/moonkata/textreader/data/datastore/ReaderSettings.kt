@@ -9,13 +9,13 @@ enum class OrientationLock { AUTO, PORTRAIT, LANDSCAPE }
 enum class LineBreakMode { PRESERVE, REFLOW }
 enum class AutoAdvanceMode { OFF, TIMER, TTS }
 
-/** 화면 좌/우 탭으로 페이지를 넘길 때의 매핑. STANDARD: 왼쪽=이전/오른쪽=다음, BOTH_NEXT: 양쪽 다 다음. */
+/** Mapping for turning pages via left/right screen taps. STANDARD: left=previous/right=next, BOTH_NEXT: both sides go next. */
 enum class TouchTurnMode { STANDARD, BOTH_NEXT }
 
-/** 좌/우 스와이프로 페이지를 넘길 때의 매핑. STANDARD: <- 다음/-> 이전, BOTH_NEXT: 양방향 다 다음. */
+/** Mapping for turning pages via left/right swipe. STANDARD: <- next / -> previous, BOTH_NEXT: both directions go next. */
 enum class SwipeTurnMode { STANDARD, BOTH_NEXT }
 
-/** 페이지 넘길 때 전환 효과. NONE: 즉시 전환, SLIDE: 두 페이지가 함께 밀림, COVER: 새 페이지가 위로 덮음. */
+/** Transition effect when turning a page. NONE: instant switch, SLIDE: both pages slide together, COVER: the new page slides over the top. */
 enum class PageTransitionAnimation { NONE, SLIDE, COVER }
 
 data class ReaderSettings(
@@ -49,28 +49,33 @@ data class ReaderSettings(
     val touchTurnMode: TouchTurnMode = TouchTurnMode.STANDARD,
     val swipeTurnMode: SwipeTurnMode = SwipeTurnMode.STANDARD,
     val pageTransitionAnimation: PageTransitionAnimation = PageTransitionAnimation.NONE,
-    // VSCode 읽기 위치 동기화(.docs/VSCODE_SYNC_PLAN.md) — Supabase URL/publishable key는 어차피
-    // 공개돼도 되는 값(RLS가 실제 방어선)이라 SupabaseConfig에 고정값으로 박아두고, 여기 설정에는
-    // 진짜 지켜야 하는 공유 시크릿만 둔다(§1 "시크릿 관리" 결정).
+    // VSCode reading-position sync (.docs/VSCODE_SYNC_PLAN.md) — the Supabase URL/publishable key are
+    // fine to be public anyway (RLS is the actual line of defense), so they're hardcoded in
+    // SupabaseConfig; this settings class holds only the shared secret that actually needs
+    // protecting (§1 "secret management" decision).
     val supabaseSharedSecret: String = "",
-    /** 마지막으로 연결 테스트에 성공한 시크릿 값 — [supabaseSharedSecret]과 같을 때만 "연결됨" 표시.
-     * 시크릿을 바꾸면 자동으로 이 값과 달라지므로 별도 무효화 로직 없이 자연스럽게 재검증을 요구한다. */
+    /** The secret value that last passed a connection test — shown as "connected" only when it matches
+     * [supabaseSharedSecret]. Changing the secret automatically makes this differ, so re-verification
+     * is naturally required without any separate invalidation logic. */
     val supabaseVerifiedSecret: String = "",
-    // PC 트레이 서버 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md) — Supabase와 동일한 패턴: 호스트 +
-    // 공유 시크릿만 있으면 되고, 실제 계정 자격증명은 없음(우리가 프로토콜을 직접 통제하므로).
+    // PC tray-server file sync (.docs/PC_SYNC_SERVER_PLAN.md) — same pattern as Supabase: just a host +
+    // shared secret is enough, no real account credentials (since we control the protocol ourselves).
     val pcSyncHost: String = "",
     val pcSyncSecret: String = "",
-    /** 마지막으로 연결 테스트에 성공했을 때의 (host, secret) — 지금 설정값과 정확히 같을 때만
-     * "연결됨" 표시. */
+    /** The (host, secret) pair from the last successful connection test — shown as "connected" only
+     * when it exactly matches the current settings values. */
     val pcSyncVerifiedHost: String = "",
     val pcSyncVerifiedSecret: String = "",
-    /** PC 서버의 자체 서명 인증서 지문(SHA-256) — 연결 테스트 성공 시 그때 받은 인증서를 그대로
-     * "이 PC"로 신뢰하기로 저장해두는 값(TOFU, §5 참고). 사용자가 직접 입력하는 값이 아니라 앱이
-     * 연결 테스트 때 자동으로 채운다. */
+    /** SHA-256 fingerprint of the PC server's self-signed certificate — on a successful connection
+     * test, the certificate received at that time is stored as trusted for "this PC" (TOFU, see §5).
+     * Not a value the user enters directly; the app fills it in automatically during the connection
+     * test. */
     val pcSyncPinnedFingerprint: String = "",
-    /** 마지막으로 성공한 PC 동기화가 끝난 시각(기기 시각 기준, epoch millis) — 0이면 아직 한 번도
-     * 성공한 적 없음. 원격 파일의 [수정시각][com.moonkata.textreader.data.sync.PcRemoteFile.lastModifiedMillis]이
-     * 이 값보다 늦으면, 크기가 로컬과 같아도 "그 이후 PC에서 내용이 바뀐 파일"로 보고 다시 받는다
-     * (PcSyncFileManager.kt 참고 — 크기만 보는 기존 비교로는 우연히 같은 글자 수로 바뀐 내용을 놓친다). */
+    /** The time the last successful PC sync finished (device clock, epoch millis) — 0 means it has
+     * never succeeded yet. If a remote file's
+     * [last-modified time][com.moonkata.textreader.data.sync.PcRemoteFile.lastModifiedMillis] is later
+     * than this value, it's treated as "changed on the PC since then" and re-fetched even if its size
+     * matches the local copy (see PcSyncFileManager.kt — comparing size alone would miss content that
+     * happened to change to the same character count). */
     val pcSyncLastCompletedAtMillis: Long = 0L,
 )

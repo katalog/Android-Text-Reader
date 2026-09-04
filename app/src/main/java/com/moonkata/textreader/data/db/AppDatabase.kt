@@ -16,15 +16,16 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        /** 북마크 기능 제거 — 더 이상 쓰지 않는 bookmarks 테이블만 지우고 나머지 데이터(책장, 읽던 위치)는 그대로 둔다. */
+        /** Removes the bookmark feature — drops only the now-unused bookmarks table, leaving the rest of the data (library, reading position) untouched. */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS bookmarks")
             }
         }
 
-        /** VSCode 읽기 위치 동기화(.docs/VSCODE_SYNC_PLAN.md)용 — 동기화 루트 기준 상대 경로 저장 컬럼 추가.
-         * 기존 행은 빈 문자열로 채워지고, 서재에서 그 책을 다시 탭할 때 자연스럽게 채워진다(강제 백필 안 함). */
+        /** For VSCode reading-position sync (.docs/VSCODE_SYNC_PLAN.md) — adds a column storing the path
+         * relative to the sync root. Existing rows are filled with an empty string and get populated
+         * naturally the next time that book is tapped in the library (no forced backfill). */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN relativePath TEXT NOT NULL DEFAULT ''")

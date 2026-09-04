@@ -9,9 +9,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * [relativePathFromSafDocumentUri]는 `DocumentsContract.getDocumentId`/`getTreeDocumentId`(순수
- * URI 경로 세그먼트 파싱, 실제 콘텐츠 프로바이더 호출 없음)에 기대므로 파일 I/O 없이도 계측 테스트로
- * 검증 가능하지만, 이 파싱 자체가 android.jar 스텁에서는 동작하지 않아 app/src/test가 아니라 여기 둔다.
+ * [relativePathFromSafDocumentUri] relies on `DocumentsContract.getDocumentId`/`getTreeDocumentId`
+ * (pure URI path-segment parsing, no actual content-provider calls), so it could be verified with an
+ * instrumented test even without file I/O — but that parsing itself doesn't work against the
+ * android.jar stubs, so it lives here rather than in app/src/test.
  */
 @RunWith(AndroidJUnit4::class)
 class RelativePathSafTest {
@@ -48,9 +49,10 @@ class RelativePathSafTest {
 
     @Test
     fun siblingTreeSharingANamePrefix_isNotMistakenForTheSameTree() {
-        // 회귀 테스트: "primary:Books" 트리와 접두사가 겹치는 형제 트리 "primary:BooksExtra"의 문서를
-        // 단순 문자열 startsWith로 비교하면 잘못 매칭됐었다(구분자 없는 접두사 겹침) — 이제 "/"까지
-        // 포함해 비교하므로 null이어야 한다.
+        // Regression test: comparing documents from the sibling tree "primary:BooksExtra" — whose
+        // prefix overlaps with the "primary:Books" tree — using a plain string startsWith used to
+        // match incorrectly (an unbounded prefix overlap). The comparison now includes the trailing
+        // "/", so this should be null.
         val siblingTree = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ABooksExtra")
         val doc = DocumentsContract.buildDocumentUriUsingTree(siblingTree, "primary:BooksExtra/book.txt")
         assertNull(relativePathFromSafDocumentUri(doc, treeUri))

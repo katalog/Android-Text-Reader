@@ -6,7 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** 타이머 기반 자동 페이지 넘김 — TTS 자동 넘김과는 별개로 동작(둘은 상호 배타적으로 사용). */
+/** Timer-based auto page turn — operates independently of TTS auto-advance (the two are used mutually exclusively). */
 class AutoPageTurnController(
     private val scope: CoroutineScope,
     private val onTick: () -> Unit,

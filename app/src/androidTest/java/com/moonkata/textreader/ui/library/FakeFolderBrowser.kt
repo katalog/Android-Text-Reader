@@ -5,9 +5,10 @@ import com.moonkata.textreader.data.file.FolderBrowser
 import com.moonkata.textreader.model.FolderEntry
 
 /**
- * 실제 SAF 권한이나 시스템 폴더 선택창 없이, 미리 정해둔 폴더 → 목록 매핑만 돌려주는 테스트 더블.
- * `FolderEntry.TextFile`이 가리키는 실제 파일(`BookSource`)은 진짜 읽을 수 있는 경로(예: 테스트가
- * 직접 써둔 파일의 file:// URI)여야 리더까지 이어지는 시나리오를 검증할 수 있다.
+ * A test double that, without real SAF permissions or a system folder picker, just returns a
+ * predetermined folder-to-listing mapping. The real file (`BookSource`) that `FolderEntry.TextFile`
+ * points to needs to be a genuinely readable path (e.g. a `file://` URI for a file the test wrote
+ * itself) in order to verify scenarios that carry through to the reader.
  */
 class FakeFolderBrowser(
     private val entriesByLocation: Map<Uri, List<FolderEntry>>,

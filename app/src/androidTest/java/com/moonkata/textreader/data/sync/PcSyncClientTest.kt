@@ -19,12 +19,14 @@ import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 
 /**
- * `PcSyncClient`가 PC 트레이 서버(HTTPS, 자체 서명 인증서 + TOFU 지문 고정)와 주고받는 실제 요청/응답
- * 계약을 로컬 MockWebServer(HTTPS)로 검증한다 — .docs/PC_SYNC_SERVER_PLAN.md §5.
+ * Verifies the real request/response contract that `PcSyncClient` exchanges with the PC tray server
+ * (HTTPS, self-signed certificate + TOFU fingerprint pinning) against a local MockWebServer (HTTPS) —
+ * .docs/PC_SYNC_SERVER_PLAN.md §5.
  *
- * `PcSyncClient`의 포트는 [PC_SYNC_PORT](고정값)라 호출자가 바꿀 수 없으므로, MockWebServer도 임의
- * 포트가 아니라 그 고정 포트로 직접 띄운다 — 이 기기(테스트를 실행하는 안드로이드) 로컬에서 그 포트를
- * 실제로 쓰는 다른 프로세스는 없다(PC 쪽 서버는 별도 기기의 포트라 충돌하지 않음).
+ * `PcSyncClient`'s port is [PC_SYNC_PORT] (a fixed value) that callers cannot change, so MockWebServer
+ * is also started directly on that fixed port rather than a random one — no other process on this
+ * device (the Android device running the tests) actually uses that port locally (the PC-side server
+ * is a port on a separate device, so there's no conflict).
  */
 @RunWith(AndroidJUnit4::class)
 class PcSyncClientTest {
@@ -83,8 +85,9 @@ class PcSyncClientTest {
 
     @Test
     fun pinnedMode_withAWrongFingerprint_isRejected() {
-        // TOFU의 핵심 방어선 — 저장해둔 지문과 실제로 받은 인증서 지문이 다르면(다른 PC로 바뀌었거나
-        // 중간자 공격) 시크릿이 맞아도 거부해야 한다.
+        // The core defense of TOFU — if the stored fingerprint differs from the actually received
+        // certificate fingerprint (switched to a different PC, or a man-in-the-middle attack), the
+        // connection must be rejected even if the secret is correct.
         server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
         val client = PcSyncClient("127.0.0.1", "secret", pinnedFingerprint = "00:11:22:33:AA:BB")
 
@@ -141,8 +144,8 @@ class PcSyncClientTest {
         runBlocking { client.downloadFile("폴더/책 1.txt", ByteArrayOutputStream()) }
 
         val path = server.takeRequest().path.orEmpty()
-        assertTrue("경로가 /file?path=로 시작해야 함: $path", path.startsWith("/file?path="))
-        assertFalse("인코딩된 경로엔 원시 공백이 없어야 함: $path", path.contains(" "))
+        assertTrue("The path should start with /file?path=: $path", path.startsWith("/file?path="))
+        assertFalse("The encoded path should not contain a raw space: $path", path.contains(" "))
     }
 
     @Test

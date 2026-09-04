@@ -35,7 +35,7 @@ class ReaderSettingsRepository(private val context: Context) {
         val LINE_BREAK_MODE = stringPreferencesKey("line_break_mode")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val VOLUME_KEY_PAGING = booleanPreferencesKey("volume_key_paging")
-        // 저장된 키 이름은 예전 "건너뛰기" 명칭 그대로 유지 — 바꾸면 기존에 저장된 챕터 점프 설정이 날아간다.
+        // The stored key name keeps the old "skip" naming as-is — changing it would wipe out existing saved chapter jump settings.
         val CHAPTER_JUMP_ENABLED = booleanPreferencesKey("chapter_skip_enabled")
         val CHAPTER_JUMP_DIVISIONS = intPreferencesKey("chapter_skip_divisions")
         val AUTO_ADVANCE_MODE = stringPreferencesKey("auto_advance_mode")
@@ -138,14 +138,15 @@ class ReaderSettingsRepository(private val context: Context) {
     suspend fun updateTouchTurnMode(value: TouchTurnMode) = edit { it[Keys.TOUCH_TURN_MODE] = value.name }
     suspend fun updateSwipeTurnMode(value: SwipeTurnMode) = edit { it[Keys.SWIPE_TURN_MODE] = value.name }
     suspend fun updatePageTransitionAnimation(value: PageTransitionAnimation) = edit { it[Keys.PAGE_TRANSITION_ANIMATION] = value.name }
-    /** [verifiedSecret]을 같이 넘기면(연결 테스트 성공 시) 한 번의 커밋으로 시크릿+검증 상태를 함께 저장한다. */
+    /** When [verifiedSecret] is also passed (on a successful connection test), the secret and its verified state are saved together in a single commit. */
     suspend fun updateSupabaseSharedSecret(value: String, verifiedSecret: String? = null) = edit {
         it[Keys.SUPABASE_SHARED_SECRET] = value
         if (verifiedSecret != null) it[Keys.SUPABASE_VERIFIED_SECRET] = verifiedSecret
     }
 
-    /** [verified]가 true면(연결 테스트 성공) 지금 값을 검증 완료 상태로도 같이 저장한다. [fingerprint]는
-     * 연결 테스트 때 실제로 받은 PC 인증서 지문 — TOFU 방식으로 그 값을 "이 PC"로 신뢰하기로 저장. */
+    /** When [verified] is true (connection test succeeded), the current values are also saved as the
+     * verified state. [fingerprint] is the PC certificate fingerprint actually received during the
+     * connection test — stored so that value is trusted as "this PC" going forward, TOFU-style. */
     suspend fun updatePcSyncConnection(host: String, secret: String, verified: Boolean = false, fingerprint: String? = null) = edit {
         it[Keys.PC_SYNC_HOST] = host
         it[Keys.PC_SYNC_SECRET] = secret

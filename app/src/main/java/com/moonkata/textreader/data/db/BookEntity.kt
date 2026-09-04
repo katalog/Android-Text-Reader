@@ -19,7 +19,8 @@ data class BookEntity(
     val fileSizeBytes: Long = 0,
     val addedAt: Long,
     val lastOpenedAt: Long? = null,
-    /** 동기화 루트 폴더 기준 상대 경로(정규화 완료 — VSCode 읽기 위치 동기화 매칭 키). 비어있으면
-     * 아직 계산 안 된 책(마이그레이션 이전에 등록됨)이거나 zip 안의 파일이라 동기화 대상이 아님. */
+    /** Path relative to the sync root folder (already normalized — the matching key for VSCode reading-
+     * position sync). Empty means either this book hasn't had it computed yet (registered before the
+     * migration) or it's a file inside a zip and therefore not eligible for sync. */
     val relativePath: String = "",
 )

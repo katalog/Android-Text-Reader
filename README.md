@@ -2,8 +2,6 @@
 
 # Moonkata Reader (문카타 리더)
 
-**[English](README.md) | [한국어](README.ko.md)**
-
 An Android text reader for local `.txt` novels, built solo end-to-end as a **fully offline-first, single-user app** — no accounts, no vendor lock-in, no background telemetry. The core reading experience never touches the network. Two opt-in, off-by-default features let it talk to a PC when you want that: sharing reading position with a VSCode extension, and pulling book files from a small companion PC server — both covered below.
 
 This is the Android app half of the [moonkata-reader-project](https://github.com/katalog/moonkata-reader-project) umbrella — the two PC-side companions it talks to, [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server) and [vscode-moonkata-reader-sync](https://github.com/katalog/vscode-moonkata-reader-sync), live in their own repos.

@@ -10,15 +10,17 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * `app/src/androidTest/assets/books/`에 커밋되어 있는 퍼블릭 도메인 소설 픽스처(이광수 「무정」/「흙」,
- * Project Gutenberg의 「Moby-Dick」/「Dracula」)를 테스트에서 쓸 수 있게 캐시 파일로 복사한다.
+ * Copies the public-domain novel fixtures (Yi Kwang-su's Mujeong/Heuk, Project Gutenberg's
+ * Moby-Dick/Dracula) committed under `app/src/androidTest/assets/books/` into a cache file so tests
+ * can use them.
  *
- * asset은 `AssetManager` 스트림으로만 읽히는데 `BookSource.PlainTxt`는 실제 `Uri`가 필요해서, 복사한
- * 캐시 파일의 `file://` URI를 대신 쓴다 — `ContentResolver`는 SAF 권한 없이도 file:// URI를 그대로 읽는다.
+ * Assets can only be read via an `AssetManager` stream, but `BookSource.PlainTxt` needs a real `Uri`,
+ * so the `file://` URI of the copied cache file is used instead — `ContentResolver` reads `file://`
+ * URIs directly without needing SAF permission.
  */
 object TestBooks {
 
-    /** assets/books/ 밑의 상대 경로(예: "Heuk.txt")를 캐시 파일로 복사해 그 File을 반환한다. */
+    /** Copies a path relative to assets/books/ (e.g. "Heuk.txt") into a cache file and returns that File. */
     fun copyToCache(applicationContext: Context, assetName: String): File {
         val instrumentationContext = InstrumentationRegistry.getInstrumentation().context
         val target = File(File(applicationContext.cacheDir, "test_books"), assetName)
@@ -31,7 +33,7 @@ object TestBooks {
         return target
     }
 
-    /** 픽스처가 이 환경에 없으면(다른 PC/CI) 실패시키지 않고 테스트를 건너뛴다. */
+    /** Skips the test instead of failing it if the fixture isn't available in this environment (a different PC/CI). */
     fun assumeAvailable(assetName: String) {
         val instrumentationContext = InstrumentationRegistry.getInstrumentation().context
         val exists = try {
@@ -39,10 +41,10 @@ object TestBooks {
         } catch (e: FileNotFoundException) {
             false
         }
-        Assume.assumeTrue("테스트용 소설 픽스처가 없어 건너뜀: books/$assetName", exists)
+        Assume.assumeTrue("Skipping: no novel fixture available: books/$assetName", exists)
     }
 
-    /** 픽스처를 캐시로 복사하고 [bookRepository]에 등록해 bookId를 반환한다. */
+    /** Copies the fixture into cache and registers it with [bookRepository], returning the bookId. */
     suspend fun insertBook(applicationContext: Context, bookRepository: BookRepository, assetName: String): Long {
         assumeAvailable(assetName)
         val file = copyToCache(applicationContext, assetName)

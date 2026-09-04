@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 
-/** 로컬 라이브러리 SAF 트리 안의 동기화 대상 파일 하나 — [relativePath]는 라이브러리 루트 기준 `/` 구분. */
+/** A single sync-eligible file inside the local library's SAF tree — [relativePath] is `/`-separated, rooted at the library root. */
 data class LocalLibraryFile(
     val relativePath: String,
     val sizeBytes: Long,
@@ -13,9 +13,10 @@ data class LocalLibraryFile(
 )
 
 /**
- * PC 동기화(.docs/PC_SYNC_SERVER_PLAN.md §3)의 델타 계산용 — 라이브러리 SAF 트리 전체를 재귀적으로
- * 순회해서 `.txt`/`.zip` 파일만 나열한다. `SafFolderBrowser`의 `listFolder`는 폴더뷰가 한 단계씩
- * 보여주기 위한 용도라 재귀하지 않는데, 이건 동기화용으로 전체 트리가 한 번에 필요해서 별도로 둔다.
+ * For PC sync (.docs/PC_SYNC_SERVER_PLAN.md §3) delta computation — recursively walks the entire library
+ * SAF tree and lists only `.txt`/`.zip` files. `SafFolderBrowser`'s `listFolder` is meant for the folder
+ * view to show one level at a time, so it doesn't recurse; this is kept separate because sync needs the
+ * whole tree at once.
  */
 class LocalLibraryScanner(private val context: Context) {
 

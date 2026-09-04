@@ -9,8 +9,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 실제 픽스처 파일을 읽는 케이스만 여기 남는다 — Context(에셋 접근)가 필요해서 androidTest다.
- * EUC-KR/ASCII 합성 바이트 케이스는 Android 의존성이 없어 app/src/test의 EncodingDetectorTest로 옮김.
+ * Only the case that reads a real fixture file remains here — it's in androidTest because it needs
+ * Context (asset access). The EUC-KR/ASCII synthetic byte cases have no Android dependency and were
+ * moved to EncodingDetectorTest in app/src/test.
  */
 @RunWith(AndroidJUnit4::class)
 class EncodingDetectionTest {

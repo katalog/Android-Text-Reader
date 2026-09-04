@@ -1,0 +1,157 @@
+<resources>
+    <string name="app_name">문카타 리더</string>
+
+    <!-- Library screen -->
+    <string name="library_default_title">내 서재</string>
+    <string name="library_up_folder_desc">상위 폴더</string>
+    <string name="library_pc_sync_desc">PC 파일 동기화 설정</string>
+    <string name="library_sort_desc">정렬</string>
+    <string name="library_settings_desc">설정</string>
+    <string name="library_add_folder">폴더 추가</string>
+    <string name="library_change_folder">폴더 변경</string>
+    <string name="library_no_folder_added">폴더를 추가해서 txt 소설을 불러오세요</string>
+    <string name="library_no_txt_zip_files">이 폴더에는 txt/zip 파일이 없습니다</string>
+    <string name="library_percent_read">%1$.3f%% 읽음</string>
+    <string name="library_unread">안읽음</string>
+    <string name="library_resume_reading_title">이어서 읽기</string>
+    <string name="library_resume_reading_message">"\"%1$s\" 계속 보시겠어요?"</string>
+    <string name="library_resume_reading_confirm">계속 보기</string>
+    <string name="library_resume_reading_dismiss">괜찮아요</string>
+    <string name="library_pc_sync_secret_empty">주소 또는 시크릿이 비어있음</string>
+    <string name="library_pc_sync_qr_payload_empty">QR 페이로드에 빈 값이 있음</string>
+    <string name="library_pc_sync_select_folder_first">먼저 라이브러리 폴더를 선택하세요</string>
+    <string name="library_pc_sync_test_connection_first">먼저 연결 테스트를 통과해야 합니다</string>
+    <string name="library_pc_sync_cannot_connect">PC에 연결할 수 없습니다</string>
+    <string name="library_supabase_secret_empty">시크릿이 비어있음</string>
+    <string name="sort_name_asc">이름순</string>
+    <string name="sort_name_desc">이름 역순</string>
+    <string name="sort_date_desc">최근 수정순</string>
+    <string name="sort_date_asc">오래된 수정순</string>
+    <string name="sort_size_desc">큰 용량순</string>
+    <string name="sort_size_asc">작은 용량순</string>
+
+    <!-- QR scanner -->
+    <string name="qr_align_hint">QR 코드를 화면 중앙에 맞춰주세요</string>
+    <string name="qr_close_desc">닫기</string>
+
+    <!-- Chapter pattern sheet -->
+    <string name="chapter_pattern_title">챕터 인식 패턴</string>
+    <string name="chapter_pattern_description">아래 패턴 중 하나라도 한 줄 전체와 일치하면 챕터 제목으로 인식합니다.</string>
+    <string name="chapter_pattern_example_prefix">예: %1$s</string>
+    <string name="chapter_pattern_custom_title">커스텀 정규식 추가</string>
+    <string name="chapter_pattern_custom_placeholder" translatable="false">예: ^Vol\\.\\s*\\d+</string>
+    <string name="chapter_pattern_add_desc">추가</string>
+    <string name="chapter_pattern_invalid_regex">올바른 정규식이 아니에요</string>
+    <string name="chapter_pattern_delete_desc">삭제</string>
+    <string name="chapter_pattern_preset_hash_label">## 로 시작</string>
+    <string name="chapter_pattern_preset_hash_example">## 제1장 평범하기 그지없는 노르만인 수도사</string>
+
+    <!-- Quick settings sheet -->
+    <string name="settings_section_font">글자</string>
+    <string name="settings_font_size">크기</string>
+    <string name="settings_line_height">줄간격</string>
+    <string name="settings_letter_spacing">자간</string>
+    <string name="settings_font_picker_button">폰트 선택 / 다운로드</string>
+    <string name="settings_section_margins">여백</string>
+    <string name="settings_margin_horizontal">좌우</string>
+    <string name="settings_margin_top">위</string>
+    <string name="settings_margin_bottom">아래</string>
+    <string name="settings_section_theme">테마</string>
+    <string name="settings_theme_light">라이트</string>
+    <string name="settings_theme_dark">다크</string>
+    <string name="settings_theme_sepia">세피아</string>
+    <string name="settings_section_page_turn_mode">넘김 방식</string>
+    <string name="settings_page_turn_paged">페이지 넘김</string>
+    <string name="settings_page_turn_scroll">스크롤</string>
+    <string name="settings_section_transition_animation">전환 애니메이션</string>
+    <string name="settings_transition_none">없음</string>
+    <string name="settings_transition_slide">슬라이드</string>
+    <string name="settings_transition_cover">덮기</string>
+    <string name="settings_section_page_turn_options">페이지 넘김 옵션</string>
+    <string name="settings_touch_zones">터치 (좌/우 탭)</string>
+    <string name="settings_touch_standard">왼쪽 이전 · 오른쪽 다음</string>
+    <string name="settings_touch_both_next">양쪽 다 다음</string>
+    <string name="settings_swipe">스와이프 (좌우 밀기)</string>
+    <string name="settings_swipe_standard">← 다음 · → 이전</string>
+    <string name="settings_swipe_both_next">양방향 다 다음</string>
+    <string name="settings_section_line_break">줄바꿈</string>
+    <string name="settings_line_break_preserve">원문 유지</string>
+    <string name="settings_line_break_reflow">문단 재구성</string>
+    <string name="settings_section_chapter_jump">챕터 점프</string>
+    <string name="settings_chapter_jump_enabled">켜짐</string>
+    <string name="settings_chapter_jump_divisions">등분 수</string>
+    <string name="settings_chapter_pattern_button">챕터 인식 패턴 설정</string>
+    <string name="settings_section_screen">화면</string>
+    <string name="settings_keep_screen_on">화면 꺼짐 방지</string>
+    <string name="settings_volume_key_paging">볼륨키로 넘기기</string>
+    <string name="settings_brightness_override">밝기 직접 조절</string>
+    <string name="settings_brightness">밝기</string>
+    <string name="settings_orientation">화면 방향</string>
+    <string name="settings_orientation_auto">자동</string>
+    <string name="settings_orientation_portrait">세로</string>
+    <string name="settings_orientation_landscape">가로</string>
+    <string name="settings_section_auto_advance">자동 넘김 / TTS</string>
+    <string name="settings_auto_advance_off">끄기</string>
+    <string name="settings_auto_advance_timer">타이머</string>
+    <string name="settings_auto_advance_tts">TTS</string>
+    <string name="settings_auto_advance_interval">%1$d초</string>
+    <string name="settings_auto_advance_interval_label">간격</string>
+    <string name="settings_section_vscode_sync">VSCode 읽기 위치 동기화</string>
+    <string name="settings_vscode_sync_description">VSCode에서 \"Moonkata Sync: QR로 연결\"로 뜬 QR을 스캔하거나, 공유 시크릿을 직접 붙여넣고 연결 테스트를 눌러 확인하세요.</string>
+    <string name="settings_connect_via_qr">QR로 연결</string>
+    <string name="settings_shared_secret">공유 시크릿</string>
+    <string name="settings_test_connection">연결 테스트</string>
+    <string name="settings_connected">연결됨</string>
+    <string name="settings_connection_failed">연결 실패 — %1$s</string>
+    <string name="settings_check_secret">시크릿을 확인하세요</string>
+    <string name="settings_stepper_decrease_desc">%1$s 감소</string>
+    <string name="settings_stepper_increase_desc">%1$s 증가</string>
+
+    <!-- Font picker sheet -->
+    <string name="font_picker_title">폰트</string>
+    <string name="font_picker_system_default">시스템 기본</string>
+    <string name="font_picker_download_desc">다운로드</string>
+
+    <!-- Reader screen -->
+    <string name="reader_back_desc">뒤로</string>
+    <string name="reader_settings_desc">설정</string>
+    <string name="reader_toc_desc">목차</string>
+    <string name="reader_search_desc">검색</string>
+    <string name="reader_chapter_jump_on">챕터 점프 ON</string>
+    <string name="reader_chapter_jump">챕터 점프</string>
+    <string name="reader_external_position_title">다른 기기에서 더 읽으셨어요</string>
+    <string name="reader_external_position_message">현재 %1$.1f%% 읽는 중 — 다른 기기는 %2$.1f%%까지 읽으셨네요. 그 위치로 이동할까요?</string>
+    <string name="reader_external_position_confirm">이동</string>
+    <string name="reader_external_position_dismiss">괜찮아요</string>
+
+    <!-- Search sheet -->
+    <string name="search_field_label">본문 검색</string>
+    <string name="search_desc">검색</string>
+
+    <!-- Table of contents sheet -->
+    <string name="toc_empty">목차를 찾을 수 없어요</string>
+
+    <!-- PC file sync sheet -->
+    <string name="pc_sync_title">PC 파일 동기화</string>
+    <string name="pc_sync_description">PC 트레이 메뉴의 \"동기화 QR 보기\"를 스캔하면 주소·시크릿이 자동으로 채워지고 연결까지 바로 끝납니다. 카메라를 쓸 수 없다면 아래에서 PC를 찾거나 직접 입력하세요.</string>
+    <string name="pc_sync_connect_via_qr">QR로 연결</string>
+    <string name="pc_sync_host_label">PC 주소 (컴퓨터 이름 또는 IP)</string>
+    <string name="pc_sync_find_pc">PC 찾기</string>
+    <string name="pc_sync_none_found">같은 네트워크에서 PC 서버를 찾지 못했습니다 — moonkata-sync-server가 실행 중인지 확인하거나 주소를 직접 입력하세요.</string>
+    <string name="pc_sync_shared_secret">공유 시크릿</string>
+    <string name="pc_sync_secret_hint">PC의 moonkata-sync-server 창에 표시된 값을 그대로 붙여넣으세요</string>
+    <string name="pc_sync_test_connection">연결 테스트</string>
+    <string name="pc_sync_connected">연결됨</string>
+    <string name="pc_sync_connection_failed">연결 실패 — %1$s</string>
+    <string name="pc_sync_check_host_secret">주소/시크릿을 확인하세요</string>
+    <string name="pc_sync_now">지금 동기화</string>
+    <string name="pc_sync_test_first">연결 테스트를 먼저 통과해야 동기화할 수 있습니다.</string>
+    <string name="pc_sync_progress">%1$d / %2$d — %3$s</string>
+    <string name="pc_sync_result">받음 %1$d · 갱신 %2$d · 삭제 %3$d</string>
+    <string name="pc_sync_result_failed_suffix"> · 실패 %1$d</string>
+    <string name="pc_sync_close">닫기</string>
+
+    <!-- Misc data-layer fallback strings -->
+    <string name="folder_root_fallback_name">루트</string>
+    <string name="font_download_failed_fallback">다운로드 실패</string>
+</resources>

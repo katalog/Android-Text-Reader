@@ -32,8 +32,8 @@ class ResumeReadingDialogTest {
             }
         }
 
-        composeTestRule.onNodeWithText("\"테스트 소설.txt\" 계속 보시겠어요?").assertExists()
-        composeTestRule.onNodeWithText("계속 보기").performClick()
+        composeTestRule.onNodeWithText("Continue \"테스트 소설.txt\"?").assertExists()
+        composeTestRule.onNodeWithText("Continue").performClick()
 
         assertEquals(1, confirmCount)
         assertEquals(0, dismissCount)
@@ -54,9 +54,9 @@ class ResumeReadingDialogTest {
             }
         }
 
-        composeTestRule.onNodeWithText("괜찮아요").performClick()
+        composeTestRule.onNodeWithText("Not now").performClick()
 
         assertEquals(1, dismissCount)
-        assertFalse("취소했는데 확인 콜백이 불리면 안 됨", confirmCount > 0)
+        assertFalse("Dismissing must not also invoke the confirm callback", confirmCount > 0)
     }
 }

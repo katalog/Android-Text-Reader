@@ -37,12 +37,14 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moonkata.textreader.MainActivity
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.OrientationLock
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.SwipeTurnMode
@@ -65,21 +67,23 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
     var showToc by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
 
-    // 로딩 중엔(제목이라도 보이게) 상하단바를 띄워두고, 로딩이 끝나면 탭 없이 자동으로 숨긴다.
-    // isLoading은 책 하나당 true→false로 딱 한 번만 바뀌므로, 그 이후 사용자가 탭으로 다시 열어도
-    // 이 이펙트가 재실행되어 도로 닫아버리는 일은 없다.
+    // Keep the top/bottom bars up while loading (so at least the title is visible), and auto-hide
+    // them without a tap once loading finishes. isLoading only ever flips true→false once per book,
+    // so this effect re-running later (e.g. the user re-opens the bars with a tap) never closes them
+    // again on its own.
     LaunchedEffect(uiState.isLoading) {
         if (!uiState.isLoading) {
             showChrome = false
         }
     }
 
-    // 화면이 꺼지거나 홈으로 나가거나 다른 앱으로 전환되면(ON_STOP) 디바운스를 기다리지 않고 읽던
-    // 위치를 로컬에 즉시 저장(그 직후 프로세스가 종료돼도 유실되지 않게) + 원격에도 체크포인트 반영.
-    // 반대로 화면이 다시 보이게 되면(ON_START — 잠금 해제, 다른 앱에서 복귀 등) 그사이 다른 기기가
-    // 더 멀리 읽었는지 다시 확인한다. 뒤로가기로 리더를 완전히 벗어나는 경우는 이 옵저버가 아니라
-    // ReaderViewModel.onCleared에서 처리한다(ON_STOP은 액티비티가 살아있는 채로 멈출 때만 오고,
-    // Navigation-Compose로 같은 액티비티 안에서 뒤로가기하면 안 옴).
+    // When the screen turns off, goes home, or switches to another app (ON_STOP), save the reading
+    // position locally right away without waiting for the debounce (so it isn't lost if the process
+    // is killed right after) and also push a checkpoint remotely. Conversely, when the screen becomes
+    // visible again (ON_START — unlock, returning from another app, etc.), re-check whether another
+    // device read further in the meantime. Leaving the reader entirely via back press is handled by
+    // ReaderViewModel.onCleared, not this observer (ON_STOP only fires while the activity stays alive
+    // paused, and doesn't fire on back press within the same activity under Navigation-Compose).
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -96,7 +100,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 볼륨키로 페이지 넘기기
+    // Page turning via volume keys
     DisposableEffect(settings.volumeKeyPagingEnabled) {
         activity?.volumeKeyHandler = if (settings.volumeKeyPagingEnabled) {
             { keyCode ->
@@ -112,7 +116,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         onDispose { activity?.volumeKeyHandler = null }
     }
 
-    // 화면 꺼짐 방지
+    // Keep screen on
     DisposableEffect(settings.keepScreenOnEnabled) {
         val window = activity?.window
         if (settings.keepScreenOnEnabled) {
@@ -123,7 +127,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    // 밝기 직접 조절 — 화면을 벗어나면 항상 원상복구
+    // Manual brightness override — always restored when leaving this screen
     DisposableEffect(settings.brightnessOverrideEnabled, settings.brightnessValue) {
         val window = activity?.window
         if (window != null) {
@@ -144,7 +148,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         }
     }
 
-    // 화면 방향 고정 — 화면을 벗어나면 항상 자동으로 복구
+    // Orientation lock — always restored to auto when leaving this screen
     DisposableEffect(settings.orientationLock) {
         activity?.requestedOrientation = when (settings.orientationLock) {
             OrientationLock.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -156,7 +160,8 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
 
     val readerColors = ReaderThemePresets.forSettings(settings)
 
-    // 리더 화면을 벗어나면 상태바/내비게이션 바를 원래 상태로 복구 — 딱 한 번만 원래 색을 기억해둔다.
+    // Restore the status/navigation bars to their original state when leaving the reader screen —
+    // remember the original colors exactly once.
     DisposableEffect(Unit) {
         val window = activity?.window
         val originalStatusBarColor = window?.statusBarColor
@@ -173,8 +178,9 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         }
     }
 
-    // 홈/뒤로/최근 앱 버튼이 있는 시스템 내비게이션 바·상태 바를 읽기 테마 배경색에 맞춘다.
-    // 기본적으로는 시스템이 가독성을 위해 자체 스크림을 덮어써서 읽기 테마와 무관하게 항상 같은 색으로 보인다.
+    // Match the system status bar and navigation bar (home/back/recents buttons) to the reader
+    // theme's background color. By default the system overlays its own scrim for readability, so
+    // they'd otherwise always look the same regardless of the reader theme.
     DisposableEffect(readerColors) {
         val window = activity?.window
         if (window != null) {
@@ -207,9 +213,11 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                         val swipeThresholdPx = 40.dp.toPx()
                         coroutineScope {
                             launch {
-                                // 상하단바가 떠 있을 때는 탭 위치와 무관하게(실제 버튼 위가 아닌 한) 그냥 닫기만 한다 —
-                                // 페이지 넘김과 동시에 발생해 혼란스러워지는 것을 막는다. 버튼 자체는 이 pointerInput보다
-                                // 위(z-order)에 있어 자기 클릭을 먼저 소비하므로 여기까지 내려오지 않는다.
+                                // While the top/bottom bars are showing, any tap (unless it's actually on a
+                                // button) just closes them, regardless of position — this avoids a page turn
+                                // happening at the same time and causing confusion. The buttons themselves sit
+                                // above this pointerInput in z-order and consume their own clicks first, so
+                                // taps on them never reach here.
                                 detectTapGestures(onTap = { offset ->
                                     if (showChrome) {
                                         showChrome = false
@@ -235,7 +243,8 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                                         change.consume()
                                     },
                                     onDragEnd = {
-                                        // 왼쪽 스와이프(<-)는 다음 페이지로 넘기는 통상적인 방향이라 두 모드 모두 동일하게 처리한다.
+                                        // A left swipe (<-) is the conventional direction for turning to the next
+                                        // page, so both modes treat it the same way.
                                         when {
                                             dragTotalX <= -swipeThresholdPx -> viewModel.next()
                                             dragTotalX >= swipeThresholdPx -> {
@@ -272,9 +281,10 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                     onToggleChapterJump = { viewModel.setChapterJumpEnabled(!settings.chapterJumpEnabled) },
                 )
             }
-            // 상단바가 숨겨져 있을 때도 읽은 비율을 놓치지 않도록 기본 화면에 항상 떠 있는 작은 표시.
-            // 배경 없이 반투명 텍스트만 놓으면 마침 그 자리에 있는 본문 마지막 줄과 겹쳐 보여
-            // "줄이 잘린 것처럼" 보이므로, 알약 모양 배경을 깔아 본문과 확실히 분리해 보이게 한다.
+            // A small always-on indicator so the read percentage isn't lost even while the top bar is
+            // hidden. Plain semi-transparent text with no background would overlap whatever body text
+            // happens to be on the last line there and look like a "cut-off line", so a pill-shaped
+            // background keeps it clearly separated from the body text.
             if (!showChrome) {
                 Surface(
                     color = readerColors.background.copy(alpha = 0.85f),
@@ -322,15 +332,12 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         val currentPercent = if (totalLength > 0) uiState.currentOffset.toFloat() / totalLength * 100 else 0f
         AlertDialog(
             onDismissRequest = viewModel::dismissExternalPositionPrompt,
-            title = { Text("다른 기기에서 더 읽으셨어요") },
+            title = { Text(stringResource(R.string.reader_external_position_title)) },
             text = {
-                Text(
-                    "현재 %.1f%% 읽는 중 — 다른 기기는 %.1f%%까지 읽으셨네요. 그 위치로 이동할까요?"
-                        .format(currentPercent, externalPercent)
-                )
+                Text(stringResource(R.string.reader_external_position_message, currentPercent, externalPercent))
             },
-            confirmButton = { TextButton(onClick = viewModel::jumpToExternalPosition) { Text("이동") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissExternalPositionPrompt) { Text("괜찮아요") } },
+            confirmButton = { TextButton(onClick = viewModel::jumpToExternalPosition) { Text(stringResource(R.string.reader_external_position_confirm)) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissExternalPositionPrompt) { Text(stringResource(R.string.reader_external_position_dismiss)) } },
         )
     }
 }

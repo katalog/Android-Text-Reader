@@ -24,11 +24,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `FontPickerSheet`의 실제 클릭 흐름: 다운로드 안 된 폰트는 선택 불가(라디오 버튼 비활성)이고,
- * 이미 다운로드된 폰트를 탭하면 실제로 `viewModel.selectFont`가 호출돼 설정에 반영되는지 검증한다.
- * 다운로드 메커니즘 자체(성공/실패/진행률)는 `FontDownloadManagerTest`/`RealFontDownloadIntegrationTest`가
- * 이미 다루므로, 여기서는 "이미 다운로드된 상태"를 더미 파일로 흉내내 클릭 흐름만 빠르게 검증한다
- * (`FontResolverTest`와 같은 패턴 — 파일 내용까지 유효한 폰트일 필요는 없음).
+ * Verifies the real click flow of `FontPickerSheet`: a font that hasn't been downloaded can't be
+ * selected (its radio button is disabled), and tapping an already-downloaded font actually calls
+ * `viewModel.selectFont` and is reflected in settings. The download mechanism itself
+ * (success/failure/progress) is already covered by `FontDownloadManagerTest`/
+ * `RealFontDownloadIntegrationTest`, so here an "already downloaded" state is faked with a dummy file
+ * to quickly verify just the click flow (same pattern as `FontResolverTest` — the file contents don't
+ * need to be a valid font).
  */
 @RunWith(AndroidJUnit4::class)
 class FontPickerSheetTest {
@@ -55,7 +57,7 @@ class FontPickerSheetTest {
             val viewModel = ReaderViewModel(application, bookId, bookRepository)
             waitUntilTrue { viewModel.uiState.value.paragraphs.isNotEmpty() }
 
-            // 실제 다운로드 없이 "이미 다운로드된 상태"만 흉내낸다.
+            // Fakes only the "already downloaded" state, without an actual download.
             fontDownloadManager.localFile(fontEntry).apply {
                 parentFile?.mkdirs()
                 writeBytes(byteArrayOf(1, 2, 3, 4))

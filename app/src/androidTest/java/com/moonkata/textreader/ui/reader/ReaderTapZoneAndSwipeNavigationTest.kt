@@ -32,10 +32,10 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * `ReaderScreen`의 탭 존/스와이프 → `viewModel.next()`/`previous()` 매핑(USER_SCENARIOS.md §4)은
- * 지금까지 `ReaderChromeAutoHideTest`가 "가운데 탭은 페이지를 안 넘긴다"만 확인했지, 실제 탭
- * 존(좌/우 절반)이나 스와이프가 `TouchTurnMode`/`SwipeTurnMode`에 따라 실제로 다음/이전 중 어느
- * 쪽으로 넘기는지는 검증된 적이 없다.
+ * The mapping from `ReaderScreen`'s tap zones/swipes to `viewModel.next()`/`previous()`
+ * (USER_SCENARIOS.md §4) has, until now, only been confirmed by `ReaderChromeAutoHideTest` in the
+ * form of "a center tap doesn't turn the page" — whether the actual tap zones (left/right halves)
+ * or swipes turn to next or previous according to `TouchTurnMode`/`SwipeTurnMode` has never been verified.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderTapZoneAndSwipeNavigationTest {
@@ -55,7 +55,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
 
     private fun waitForChromeToHide() {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
         }
     }
 
@@ -86,11 +86,11 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
             waitForChromeToHide()
 
-            // 오른쪽 절반(위쪽 30% 아래) 탭 -> 다음 페이지로.
+            // Tap the right half (below the top 30%) -> goes to next page.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.8f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // STANDARD 모드에서 왼쪽 절반 탭 -> 이전 페이지로(마커가 다시 보여야 함).
+            // In STANDARD mode, tapping the left half -> goes to previous page (the marker must reappear).
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { firstMarkerVisible(marker) }
         } finally {
@@ -128,17 +128,17 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
             waitForChromeToHide()
 
-            // 오른쪽 탭으로 한 번 넘겨서 첫 페이지를 벗어남.
+            // Turn once via the right tap to move off the first page.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.8f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // BOTH_NEXT 모드에서는 왼쪽 탭도 "다음"이라 첫 페이지로 되돌아가면 안 된다(마커가 계속 안 보여야 함).
+            // In BOTH_NEXT mode, the left tap is also "next", so it must not return to the first page (the marker must stay hidden).
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertFalse(
-                "BOTH_NEXT 모드에서는 왼쪽 탭도 다음 페이지로 가야 하므로 첫 페이지로 되돌아가면 안 됨",
+                "In BOTH_NEXT mode, the left tap must also go to the next page, so it must not return to the first page",
                 firstMarkerVisible(marker),
             )
         } finally {
@@ -176,11 +176,11 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
             waitForChromeToHide()
 
-            // 왼쪽으로 스와이프(<-) -> 항상 다음 페이지.
+            // Swipe left (<-) -> always goes to the next page.
             composeTestRule.onRoot().performTouchInput { swipeLeft() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // STANDARD 모드에서 오른쪽으로 스와이프(->) -> 이전 페이지(마커 복귀).
+            // In STANDARD mode, swiping right (->) -> goes to the previous page (marker returns).
             composeTestRule.onRoot().performTouchInput { swipeRight() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { firstMarkerVisible(marker) }
         } finally {
@@ -221,13 +221,13 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.onRoot().performTouchInput { swipeLeft() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // BOTH_NEXT 모드에서는 오른쪽 스와이프도 "다음"이라 첫 페이지로 되돌아가면 안 된다.
+            // In BOTH_NEXT mode, swiping right is also "next", so it must not return to the first page.
             composeTestRule.onRoot().performTouchInput { swipeRight() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
-                "BOTH_NEXT 모드에서는 오른쪽 스와이프도 다음 페이지로 가야 하므로 첫 페이지로 되돌아가면 안 됨",
+                "In BOTH_NEXT mode, swiping right must also go to the next page, so it must not return to the first page",
                 !firstMarkerVisible(marker),
             )
         } finally {

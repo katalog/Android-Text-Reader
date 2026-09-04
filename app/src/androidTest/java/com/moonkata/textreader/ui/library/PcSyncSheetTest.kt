@@ -32,12 +32,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `PcSyncSheet` 자체(버튼을 누르는 흐름)의 실제 클릭 상호작용을 검증한다 — 그 밑단인
- * `PcSyncClient`/`computeSyncDelta`는 `PcSyncClientTest`/`PcSyncDeltaTest`에서 이미 프로토콜/로직
- * 단위로 검증돼 있으니, 여기서는 시트가 그 결과를 화면에 정확히 반영하는지에 집중한다.
+ * Verifies the actual click interactions of `PcSyncSheet` itself (the button-pressing flow) — the
+ * layer underneath it, `PcSyncClient`/`computeSyncDelta`, is already verified at the
+ * protocol/logic level in `PcSyncClientTest`/`PcSyncDeltaTest`, so this focuses on whether the
+ * sheet accurately reflects those results on screen.
  *
- * `pcSync*` 설정은 실기기의 실제 DataStore를 그대로 쓰므로(다른 시트 테스트들과 동일한 패턴), 시작 전
- * 값을 기억해뒀다가 끝나면 정확히 복원한다.
+ * The `pcSync*` settings use the real device's actual DataStore (same pattern as the other sheet
+ * tests), so the starting values are remembered and precisely restored at the end.
  */
 @RunWith(AndroidJUnit4::class)
 class PcSyncSheetTest {
@@ -62,8 +63,9 @@ class PcSyncSheetTest {
     @After
     fun tearDown() {
         runBlocking {
-            // verified 필드부터 원래 값으로 되돌린 다음(그래야 draft가 그 값과 우연히 같아지는 걸
-            // 피할 수 있음), draft(pcSyncHost/Secret)가 verified와 달랐던 경우까지 마저 복원한다.
+            // Restore the verified fields first (this avoids the draft accidentally matching that
+            // value by coincidence), then also restore the draft (pcSyncHost/Secret) for cases
+            // where it differed from verified.
             settingsRepository.updatePcSyncConnection(
                 originalSettings.pcSyncVerifiedHost,
                 originalSettings.pcSyncVerifiedSecret,
@@ -79,9 +81,10 @@ class PcSyncSheetTest {
         testDb.close()
     }
 
-    // "지금 동기화"는 시트 안에 섹션 제목과 버튼 라벨 두 군데에 똑같이 쓰여있어(PcSyncSheet.kt) 단순
-    // onNodeWithText로는 두 노드가 걸린다 — 클릭 가능한 쪽(버튼)만 특정한다.
-    private fun syncButton() = composeTestRule.onNode(hasText("지금 동기화").and(hasClickAction()))
+    // "Sync now" appears twice in the sheet, identically, as both a section title and a button
+    // label (PcSyncSheet.kt), so a plain onNodeWithText matches both nodes — narrow down to just
+    // the clickable one (the button).
+    private fun syncButton() = composeTestRule.onNode(hasText("Sync now").and(hasClickAction()))
 
     @Test
     fun unverifiedConnection_disablesSyncButton_andShowsHint() {
@@ -96,7 +99,7 @@ class PcSyncSheetTest {
         composeTestRule.waitForIdle()
 
         syncButton().performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithText("연결 테스트를 먼저 통과해야 동기화할 수 있습니다.").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("Pass the connection test first to sync.").performScrollTo().assertExists()
     }
 
     @Test
@@ -112,7 +115,7 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("연결됨").assertExists()
+        composeTestRule.onNodeWithText("Connected").assertExists()
         syncButton().performScrollTo().assertIsEnabled()
     }
 
@@ -127,10 +130,10 @@ class PcSyncSheetTest {
             MaterialTheme { PcSyncSheet(viewModel = viewModel, settings = settings, onDismiss = {}) }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("연결됨").assertExists()
+        composeTestRule.onNodeWithText("Connected").assertExists()
 
-        composeTestRule.onNodeWithText("공유 시크릿").performTextClearance()
-        composeTestRule.onNodeWithText("공유 시크릿").performTextInput("different-secret")
+        composeTestRule.onNodeWithText("Shared secret").performTextClearance()
+        composeTestRule.onNodeWithText("Shared secret").performTextInput("different-secret")
         composeTestRule.waitForIdle()
 
         syncButton().performScrollTo().assertIsNotEnabled()
@@ -138,9 +141,9 @@ class PcSyncSheetTest {
 
     @Test
     fun connectionTestFailure_showsFailureMessage_andKeepsSyncDisabled() {
-        // 진짜 네트워크로 접속 자체가 안 되는 걸 확인하는 테스트 — 192.0.2.0/24(TEST-NET-1)는 예약된
-        // 블랙홀 대역이라 어떤 서버도 응답하지 않는 게 보장된다. PcSyncClient의 connectTimeout(5초)
-        // 안에 실패로 끝나야 한다.
+        // A test that confirms connecting over a real network genuinely fails — 192.0.2.0/24
+        // (TEST-NET-1) is a reserved blackhole range guaranteed not to have any server respond.
+        // It must fail within PcSyncClient's connectTimeout (5 seconds).
         runBlocking {
             settingsRepository.updatePcSyncConnection("", "", verified = false)
         }
@@ -151,15 +154,16 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("PC 주소 (컴퓨터 이름 또는 IP)").performTextInput("192.0.2.1")
-        composeTestRule.onNodeWithText("공유 시크릿").performTextInput("whatever")
-        composeTestRule.onNodeWithText("연결 테스트").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("PC address (computer name or IP)").performTextInput("192.0.2.1")
+        composeTestRule.onNodeWithText("Shared secret").performTextInput("whatever")
+        composeTestRule.onNodeWithText("Test connection").performScrollTo().performClick()
 
-        // 실패 문구에 실제 원인(예외 종류/메시지)이 그대로 붙어서 나오게 바뀌어서(원인을 못 찾아
-        // 헤매던 실사용 버그를 겪은 뒤 추가, .docs/SYNC_MULTIUSER_PLAN.md 참고), 고정 문구 대신
-        // "연결 실패 —" 접두사만 확인한다 — 정확한 예외 메시지는 플랫폼/타이밍에 따라 달라질 수 있다.
+        // The failure message was changed to append the actual cause (exception type/message)
+        // verbatim (added after a real-world bug where the cause was hard to track down, see
+        // .docs/SYNC_MULTIUSER_PLAN.md), so instead of a fixed phrase, only the "Connection failed —"
+        // prefix is checked here — the exact exception message can vary by platform/timing.
         composeTestRule.waitUntil(timeoutMillis = 8_000) {
-            composeTestRule.onAllNodesWithText("연결 실패 —", substring = true)
+            composeTestRule.onAllNodesWithText("Connection failed —", substring = true)
                 .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
         syncButton().performScrollTo().assertIsNotEnabled()
@@ -178,13 +182,13 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("PC 주소 (컴퓨터 이름 또는 IP)").performTextInput("draft-host")
-        composeTestRule.onNodeWithText("공유 시크릿").performTextInput("draft-secret")
-        composeTestRule.onNodeWithText("닫기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("PC address (computer name or IP)").performTextInput("draft-host")
+        composeTestRule.onNodeWithText("Shared secret").performTextInput("draft-secret")
+        composeTestRule.onNodeWithText("Close").performScrollTo().performClick()
 
-        assertTrue("닫기를 누르면 onDismiss가 호출돼야 함", dismissed)
-        // updatePcSyncConnectionDraft는 viewModelScope.launch로 커밋해 onDismiss 호출과 동기화돼 있지
-        // 않다 — 실제로 DataStore에 반영될 때까지 기다린다.
+        assertTrue("onDismiss must be invoked when Close is pressed", dismissed)
+        // updatePcSyncConnectionDraft commits via viewModelScope.launch, so it isn't synchronized
+        // with the onDismiss call — wait until it's actually reflected in DataStore.
         waitUntilTrue { runBlocking { settingsRepository.settingsFlow.first().pcSyncHost } == "draft-host" }
         val persisted = runBlocking { settingsRepository.settingsFlow.first() }
         assertEquals("draft-host", persisted.pcSyncHost)

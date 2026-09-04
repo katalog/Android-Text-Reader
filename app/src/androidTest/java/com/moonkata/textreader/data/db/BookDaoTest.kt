@@ -16,7 +16,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** `BookDao`를 인메모리 Room DB로 직접 겨냥 — 지금까지 다른 테스트들을 통해서만 간접적으로 exercise됐다. */
+/** Targets `BookDao` directly with an in-memory Room DB — until now it was only ever exercised indirectly through other tests. */
 @RunWith(AndroidJUnit4::class)
 class BookDaoTest {
 
@@ -66,9 +66,9 @@ class BookDaoTest {
         val firstId = dao.insert(book("file:///dup.txt", addedAt = 1_000L))
         val secondId = dao.insert(book("file:///dup.txt", addedAt = 2_000L))
 
-        assertEquals("OnConflictStrategy.IGNORE라 두 번째 insert는 -1을 돌려줘야 함", -1L, secondId)
+        assertEquals("Since OnConflictStrategy.IGNORE is used, the second insert must return -1", -1L, secondId)
         val stored = dao.findByUri("file:///dup.txt")
-        assertEquals("원래 행이 그대로 남아있어야 함(두 번째 addedAt으로 덮어써지면 안 됨)", firstId, stored?.id)
+        assertEquals("The original row must remain as-is (must not be overwritten with the second addedAt)", firstId, stored?.id)
         assertEquals(1_000L, stored?.addedAt)
     }
 
@@ -81,7 +81,7 @@ class BookDaoTest {
         assertEquals(1234, updated?.lastReadCharOffset)
         assertEquals(0.5f, updated?.lastReadProgressPercent)
         assertEquals(9_999L, updated?.lastOpenedAt)
-        assertEquals("건드리지 않은 필드는 그대로여야 함", "책 file:///pos.txt", updated?.displayName)
+        assertEquals("Untouched fields must remain unchanged", "책 file:///pos.txt", updated?.displayName)
     }
 
     @Test
@@ -137,7 +137,7 @@ class BookDaoTest {
         val job = launch {
             dao.getAllOrderByRecent().collect { emissions.add(it.size) }
         }
-        // Flow 구독이 실제로 시작될 때까지 잠깐 대기.
+        // Wait briefly until the Flow subscription actually starts.
         var waited = 0
         while (emissions.isEmpty() && waited < 2_000) {
             delay(20)
@@ -151,7 +151,7 @@ class BookDaoTest {
         }
         job.cancel()
 
-        assertTrue("insert 후 Flow가 새 목록을 다시 emit해야 함", emissions.size >= 2)
+        assertTrue("The Flow must emit the new list again after an insert", emissions.size >= 2)
         assertEquals(0, emissions.first())
         assertEquals(1, emissions.last())
     }

@@ -49,9 +49,11 @@ import android.app.Application
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.moonkata.textreader.R
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
 import com.moonkata.textreader.ui.reader.QuickSettingsSheet
@@ -94,34 +96,34 @@ fun LibraryScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(uiState.path.lastOrNull()?.name ?: "내 서재") },
+                    title = { Text(uiState.path.lastOrNull()?.name ?: stringResource(R.string.library_default_title)) },
                     navigationIcon = {
                         if (uiState.path.size > 1) {
                             IconButton(onClick = { viewModel.navigateUp() }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "상위 폴더")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.library_up_folder_desc))
                             }
                         }
                     },
                     actions = {
                         if (uiState.rootUri != null) {
                             IconButton(onClick = { showPcSync = true }) {
-                                Icon(Icons.Default.Sync, contentDescription = "PC 파일 동기화 설정")
+                                Icon(Icons.Default.Sync, contentDescription = stringResource(R.string.library_pc_sync_desc))
                             }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "정렬")
+                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(R.string.library_sort_desc))
                                 }
                                 DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                                     FolderSortOption.entries.forEach { option ->
                                         DropdownMenuItem(
-                                            text = { Text(option.label) },
+                                            text = { Text(stringResource(option.labelRes)) },
                                             onClick = { viewModel.setSortOption(option); showSortMenu = false },
                                         )
                                     }
                                 }
                             }
                             IconButton(onClick = { showSettings = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = "설정")
+                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.library_settings_desc))
                             }
                         }
                     },
@@ -135,7 +137,7 @@ fun LibraryScreen(
             ExtendedFloatingActionButton(
                 onClick = pickFolder,
                 icon = { Icon(Icons.Default.FolderOpen, contentDescription = null) },
-                text = { Text(if (uiState.rootUri == null) "폴더 추가" else "폴더 변경") },
+                text = { Text(if (uiState.rootUri == null) stringResource(R.string.library_add_folder) else stringResource(R.string.library_change_folder)) },
             )
         },
     ) { padding ->
@@ -145,12 +147,12 @@ fun LibraryScreen(
             }
             if (uiState.rootUri == null) {
                 Text(
-                    "폴더를 추가해서 txt 소설을 불러오세요",
+                    stringResource(R.string.library_no_folder_added),
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
             } else if (uiState.entries.isEmpty() && !uiState.isLoading) {
                 Text(
-                    "이 폴더에는 txt/zip 파일이 없습니다",
+                    stringResource(R.string.library_no_txt_zip_files),
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
             } else {
@@ -172,23 +174,24 @@ fun LibraryScreen(
         PcSyncSheet(viewModel = viewModel, settings = uiState.settings, onDismiss = { showPcSync = false })
     }
     if (showSettings) {
-        // 서재 화면엔 열린 책이 없어 ReaderViewModel을 만들 수 없다 — LibraryViewModel이
-        // SettingsController를 구현해서 같은 설정 시트를 여기서도 그대로 재사용한다(폰트/여백/테마/
-        // VSCode 동기화 등은 책과 무관한 앱 전역 설정이라 책을 열지 않고도 바꿀 수 있어야 한다는
-        // 실사용 피드백으로 추가).
+        // There's no open book on the library screen, so a ReaderViewModel can't be created —
+        // LibraryViewModel implements SettingsController so the same settings sheet can be reused
+        // here too (font/margins/theme/VSCode sync etc. are app-wide settings unrelated to any
+        // particular book, so they should be changeable without opening one first — added from
+        // real-usage feedback).
         QuickSettingsSheet(viewModel = viewModel, settings = uiState.settings, onDismiss = { showSettings = false })
     }
 }
 
-/** Room/ViewModel과 무관한 순수 UI라 데이터 계층 없이 바로 테스트할 수 있다. */
+/** Pure UI with no Room/ViewModel dependency, so it can be tested directly without the data layer. */
 @Composable
 fun ResumeReadingDialog(displayName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("이어서 읽기") },
-        text = { Text("\"$displayName\" 계속 보시겠어요?") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("계속 보기") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("괜찮아요") } },
+        title = { Text(stringResource(R.string.library_resume_reading_title)) },
+        text = { Text(stringResource(R.string.library_resume_reading_message, displayName)) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.library_resume_reading_confirm)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_resume_reading_dismiss)) } },
     )
 }
 
@@ -238,9 +241,9 @@ private fun EntryRow(entry: FolderEntry, progress: Float?, onClick: () -> Unit) 
             if (entry is FolderEntry.TextFile) {
                 Spacer(Modifier.height(4.dp))
                 val readStatus = if (progress != null && progress > 0f) {
-                    "%.3f%% 읽음".format(progress * 100)
+                    stringResource(R.string.library_percent_read, progress * 100)
                 } else {
-                    "안읽음"
+                    stringResource(R.string.library_unread)
                 }
                 Text(
                     readStatus,

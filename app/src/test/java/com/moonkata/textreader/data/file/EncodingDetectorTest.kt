@@ -5,9 +5,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * EncodingDetector는 Android 의존성이 전혀 없는 순수 로직(juniversalchardet + java.nio.charset)이라
- * 합성 바이트로 검증 가능한 것들은 기기/에뮬레이터 없이 JVM에서 바로 도는 일반 JUnit 테스트로 둔다.
- * 실제 픽스처 파일(UTF-8)을 읽는 케이스는 Context가 필요해 androidTest의 EncodingDetectionTest에 남는다.
+ * EncodingDetector is pure logic (juniversalchardet + java.nio.charset) with no Android
+ * dependency at all, so anything verifiable with synthetic bytes is a plain JUnit test that runs
+ * directly on the JVM without a device/emulator. The case that reads an actual fixture file
+ * (UTF-8) needs a Context, so it stays in androidTest's EncodingDetectionTest.
  */
 class EncodingDetectorTest {
 
@@ -18,12 +19,12 @@ class EncodingDetectorTest {
 
         val detected = EncodingDetector.detect(eucKrBytes)
         assertTrue(
-            "EUC-KR 계열(EUC-KR/MS949/x-windows-949)로 감지되어야 함, 실제: ${detected.name()}",
+            "Should be detected as an EUC-KR variant (EUC-KR/MS949/x-windows-949), actual: ${detected.name()}",
             detected.name().let { it.equals("EUC-KR", ignoreCase = true) || it.contains("949", ignoreCase = true) },
         )
 
         val decoded = String(eucKrBytes, detected)
-        assertEquals("감지된 인코딩으로 복원한 문자열이 원문과 같아야 함", original, decoded)
+        assertEquals("The string decoded with the detected encoding should match the original", original, decoded)
     }
 
     @Test
@@ -50,9 +51,10 @@ class EncodingDetectorTest {
 
     @Test
     fun emptyInput_doesNotCrashAndProducesAUsableCharset() {
-        // 감지 실패 시 후보(MS949/x-windows-949/EUC-KR/UTF-8) 중 이 JVM이 지원하는 첫 번째가 나온다 —
-        // 정확히 어떤 이름이 나오는지는 JVM 구현에 달려있어 단정하지 않고, 크래시 없이 쓸 수 있는
-        // Charset을 돌려주는지만 확인한다.
+        // When detection fails, the first candidate (MS949/x-windows-949/EUC-KR/UTF-8) supported
+        // by this JVM is returned — exactly which name comes out depends on the JVM
+        // implementation, so we don't assert on that; we only check that a usable Charset is
+        // returned without crashing.
         val detected = EncodingDetector.detect(ByteArray(0))
 
         assertEquals("", String(ByteArray(0), detected))

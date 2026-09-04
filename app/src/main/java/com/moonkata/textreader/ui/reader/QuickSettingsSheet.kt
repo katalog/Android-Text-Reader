@@ -38,11 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
@@ -64,11 +66,12 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
     var showFontPicker by remember { mutableStateOf(false) }
     var showChapterPatterns by remember { mutableStateOf(false) }
 
-    // 공유 시크릿은 포커스 상실(blur) 이벤트에 기대어 커밋하지 않는다 — 뒤로가기/바깥 탭으로 시트가
-    // 갑자기 닫힐 때 그 이벤트가 안정적으로 안 오는 경우가 있었다(실기기 확인). 대신 로컬 초안 상태로만
-    // 들고 있다가, 시트가 닫히는 모든 경로가 공통으로 거치는 onDismissRequest 시점에 커밋한다 —
-    // 연결 테스트에 성공하면 그 즉시 별도로 커밋되므로(검증 상태와 함께) 이 경로는 "테스트 안 해보고
-    // 그냥 닫은" 경우의 폴백이다.
+    // The shared secret isn't committed on a focus-loss (blur) event — on a real device that event
+    // sometimes doesn't fire reliably when the sheet closes suddenly via back press or an outside
+    // tap. Instead it's held as local draft state only, and committed at onDismissRequest, the one
+    // point every dismissal path passes through — a successful connection test already commits it
+    // separately right away (together with the verified state), so this path is the fallback for
+    // "closed without testing."
     var sharedSecretDraft by remember { mutableStateOf(settings.supabaseSharedSecret) }
     var testingSync by remember { mutableStateOf(false) }
     var syncTestFailed by remember { mutableStateOf(false) }
@@ -92,172 +95,181 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
 
     ModalBottomSheet(onDismissRequest = dismissAndCommitSync, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text("글자", style = MaterialTheme.typography.titleMedium)
-            LabeledStepper("크기", settings.fontSizeSp, 1f, 12f..32f, format = { "${it.toInt()}sp" }) { viewModel.setFontSizeSp(it) }
-            LabeledStepper("줄간격", settings.lineHeightMultiplier, 0.1f, 1.0f..2.5f, format = { "%.1f".format(it) }) { viewModel.setLineHeightMultiplier(it) }
-            LabeledStepper("자간", settings.letterSpacingSp, 0.5f, -1f..3f, format = { "%.1f".format(it) }) { viewModel.setLetterSpacingSp(it) }
+            Text(stringResource(R.string.settings_section_font), style = MaterialTheme.typography.titleMedium)
+            LabeledStepper(stringResource(R.string.settings_font_size), settings.fontSizeSp, 1f, 12f..32f, format = { "${it.toInt()}sp" }) { viewModel.setFontSizeSp(it) }
+            LabeledStepper(stringResource(R.string.settings_line_height), settings.lineHeightMultiplier, 0.1f, 1.0f..2.5f, format = { "%.1f".format(it) }) { viewModel.setLineHeightMultiplier(it) }
+            LabeledStepper(stringResource(R.string.settings_letter_spacing), settings.letterSpacingSp, 0.5f, -1f..3f, format = { "%.1f".format(it) }) { viewModel.setLetterSpacingSp(it) }
             OutlinedButton(onClick = { showFontPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("폰트 선택 / 다운로드")
+                Text(stringResource(R.string.settings_font_picker_button))
             }
 
             SectionDivider()
-            Text("여백", style = MaterialTheme.typography.titleMedium)
-            LabeledStepper("좌우", settings.marginHorizontalDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginHorizontalDp(it) }
-            LabeledStepper("위", settings.marginTopDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginTopDp(it) }
-            LabeledStepper("아래", settings.marginBottomDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginBottomDp(it) }
+            Text(stringResource(R.string.settings_section_margins), style = MaterialTheme.typography.titleMedium)
+            LabeledStepper(stringResource(R.string.settings_margin_horizontal), settings.marginHorizontalDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginHorizontalDp(it) }
+            LabeledStepper(stringResource(R.string.settings_margin_top), settings.marginTopDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginTopDp(it) }
+            LabeledStepper(stringResource(R.string.settings_margin_bottom), settings.marginBottomDp, 4f, 0f..80f, format = { "${it.toInt()}dp" }) { viewModel.setMarginBottomDp(it) }
 
             SectionDivider()
-            Text("테마", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_theme), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(ThemePreset.LIGHT to "라이트", ThemePreset.DARK to "다크", ThemePreset.SEPIA to "세피아").forEach { (preset, label) ->
+                listOf(
+                    ThemePreset.LIGHT to R.string.settings_theme_light,
+                    ThemePreset.DARK to R.string.settings_theme_dark,
+                    ThemePreset.SEPIA to R.string.settings_theme_sepia,
+                ).forEach { (preset, labelRes) ->
                     FilterChip(
                         selected = settings.themePreset == preset,
                         onClick = { viewModel.setThemePreset(preset) },
-                        label = { Text(label) },
+                        label = { Text(stringResource(labelRes)) },
                     )
                 }
             }
 
             SectionDivider()
-            Text("넘김 방식", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_page_turn_mode), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE,
                     onClick = { viewModel.setPageTurnMode(PageTurnMode.HORIZONTAL_PAGE) },
-                    label = { Text("페이지 넘김") },
+                    label = { Text(stringResource(R.string.settings_page_turn_paged)) },
                 )
                 FilterChip(
                     selected = settings.pageTurnMode == PageTurnMode.VERTICAL_SCROLL,
                     onClick = { viewModel.setPageTurnMode(PageTurnMode.VERTICAL_SCROLL) },
-                    label = { Text("스크롤") },
+                    label = { Text(stringResource(R.string.settings_page_turn_scroll)) },
                 )
             }
 
             SectionDivider()
-            Text("전환 애니메이션", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_transition_animation), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    PageTransitionAnimation.NONE to "없음",
-                    PageTransitionAnimation.SLIDE to "슬라이드",
-                    PageTransitionAnimation.COVER to "덮기",
-                ).forEach { (animation, label) ->
+                    PageTransitionAnimation.NONE to R.string.settings_transition_none,
+                    PageTransitionAnimation.SLIDE to R.string.settings_transition_slide,
+                    PageTransitionAnimation.COVER to R.string.settings_transition_cover,
+                ).forEach { (animation, labelRes) ->
                     FilterChip(
                         selected = settings.pageTransitionAnimation == animation,
                         onClick = { viewModel.setPageTransitionAnimation(animation) },
-                        label = { Text(label) },
+                        label = { Text(stringResource(labelRes)) },
                     )
                 }
             }
 
             SectionDivider()
-            Text("페이지 넘김 옵션", style = MaterialTheme.typography.titleMedium)
-            Text("터치 (좌/우 탭)", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_section_page_turn_options), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_touch_zones), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = settings.touchTurnMode == TouchTurnMode.STANDARD,
                     onClick = { viewModel.setTouchTurnMode(TouchTurnMode.STANDARD) },
-                    label = { Text("왼쪽 이전 · 오른쪽 다음") },
+                    label = { Text(stringResource(R.string.settings_touch_standard)) },
                 )
                 FilterChip(
                     selected = settings.touchTurnMode == TouchTurnMode.BOTH_NEXT,
                     onClick = { viewModel.setTouchTurnMode(TouchTurnMode.BOTH_NEXT) },
-                    label = { Text("양쪽 다 다음") },
+                    label = { Text(stringResource(R.string.settings_touch_both_next)) },
                 )
             }
-            Text("스와이프 (좌우 밀기)", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_swipe), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = settings.swipeTurnMode == SwipeTurnMode.STANDARD,
                     onClick = { viewModel.setSwipeTurnMode(SwipeTurnMode.STANDARD) },
-                    label = { Text("← 다음 · → 이전") },
+                    label = { Text(stringResource(R.string.settings_swipe_standard)) },
                 )
                 FilterChip(
                     selected = settings.swipeTurnMode == SwipeTurnMode.BOTH_NEXT,
                     onClick = { viewModel.setSwipeTurnMode(SwipeTurnMode.BOTH_NEXT) },
-                    label = { Text("양방향 다 다음") },
+                    label = { Text(stringResource(R.string.settings_swipe_both_next)) },
                 )
             }
 
             SectionDivider()
-            Text("줄바꿈", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_line_break), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = settings.lineBreakMode == LineBreakMode.PRESERVE,
                     onClick = { viewModel.setLineBreakMode(LineBreakMode.PRESERVE) },
-                    label = { Text("원문 유지") },
+                    label = { Text(stringResource(R.string.settings_line_break_preserve)) },
                 )
                 FilterChip(
                     selected = settings.lineBreakMode == LineBreakMode.REFLOW,
                     onClick = { viewModel.setLineBreakMode(LineBreakMode.REFLOW) },
-                    label = { Text("문단 재구성") },
+                    label = { Text(stringResource(R.string.settings_line_break_reflow)) },
                 )
             }
 
             SectionDivider()
-            Text("챕터 점프", style = MaterialTheme.typography.titleMedium)
-            SwitchRow("켜짐", settings.chapterJumpEnabled) { viewModel.setChapterJumpEnabled(it) }
-            LabeledStepper("등분 수", settings.chapterJumpDivisions.toFloat(), 1f, 2f..10f, format = { "${it.toInt()}" }) {
+            Text(stringResource(R.string.settings_section_chapter_jump), style = MaterialTheme.typography.titleMedium)
+            SwitchRow(stringResource(R.string.settings_chapter_jump_enabled), settings.chapterJumpEnabled) { viewModel.setChapterJumpEnabled(it) }
+            LabeledStepper(stringResource(R.string.settings_chapter_jump_divisions), settings.chapterJumpDivisions.toFloat(), 1f, 2f..10f, format = { "${it.toInt()}" }) {
                 viewModel.setChapterJumpDivisions(it.toInt())
             }
             OutlinedButton(onClick = { showChapterPatterns = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("챕터 인식 패턴 설정")
+                Text(stringResource(R.string.settings_chapter_pattern_button))
             }
 
             SectionDivider()
-            Text("화면", style = MaterialTheme.typography.titleMedium)
-            SwitchRow("화면 꺼짐 방지", settings.keepScreenOnEnabled) { viewModel.setKeepScreenOnEnabled(it) }
-            SwitchRow("볼륨키로 넘기기", settings.volumeKeyPagingEnabled) { viewModel.setVolumeKeyPagingEnabled(it) }
-            SwitchRow("밝기 직접 조절", settings.brightnessOverrideEnabled) { viewModel.setBrightnessOverrideEnabled(it) }
+            Text(stringResource(R.string.settings_section_screen), style = MaterialTheme.typography.titleMedium)
+            SwitchRow(stringResource(R.string.settings_keep_screen_on), settings.keepScreenOnEnabled) { viewModel.setKeepScreenOnEnabled(it) }
+            SwitchRow(stringResource(R.string.settings_volume_key_paging), settings.volumeKeyPagingEnabled) { viewModel.setVolumeKeyPagingEnabled(it) }
+            SwitchRow(stringResource(R.string.settings_brightness_override), settings.brightnessOverrideEnabled) { viewModel.setBrightnessOverrideEnabled(it) }
             if (settings.brightnessOverrideEnabled) {
-                LabeledStepper("밝기", settings.brightnessValue, 0.05f, 0.05f..1f, format = { "${(it * 100).toInt()}%" }) {
+                LabeledStepper(stringResource(R.string.settings_brightness), settings.brightnessValue, 0.05f, 0.05f..1f, format = { "${(it * 100).toInt()}%" }) {
                     viewModel.setBrightnessValue(it)
                 }
             }
-            Text("화면 방향", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_orientation), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(OrientationLock.AUTO to "자동", OrientationLock.PORTRAIT to "세로", OrientationLock.LANDSCAPE to "가로").forEach { (lock, label) ->
+                listOf(
+                    OrientationLock.AUTO to R.string.settings_orientation_auto,
+                    OrientationLock.PORTRAIT to R.string.settings_orientation_portrait,
+                    OrientationLock.LANDSCAPE to R.string.settings_orientation_landscape,
+                ).forEach { (lock, labelRes) ->
                     FilterChip(
                         selected = settings.orientationLock == lock,
                         onClick = { viewModel.setOrientationLock(lock) },
-                        label = { Text(label) },
+                        label = { Text(stringResource(labelRes)) },
                     )
                 }
             }
 
             SectionDivider()
-            Text("자동 넘김 / TTS", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_auto_advance), style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    AutoAdvanceMode.OFF to "끄기",
-                    AutoAdvanceMode.TIMER to "타이머",
-                    AutoAdvanceMode.TTS to "TTS",
-                ).forEach { (mode, label) ->
+                    AutoAdvanceMode.OFF to R.string.settings_auto_advance_off,
+                    AutoAdvanceMode.TIMER to R.string.settings_auto_advance_timer,
+                    AutoAdvanceMode.TTS to R.string.settings_auto_advance_tts,
+                ).forEach { (mode, labelRes) ->
                     FilterChip(
                         selected = settings.autoAdvanceMode == mode,
                         onClick = { viewModel.setAutoAdvanceMode(mode) },
-                        label = { Text(label) },
+                        label = { Text(stringResource(labelRes)) },
                     )
                 }
             }
             if (settings.autoAdvanceMode == AutoAdvanceMode.TIMER) {
-                LabeledStepper("간격", settings.autoPageTurnIntervalSeconds.toFloat(), 5f, 3f..60f, format = { "${it.toInt()}초" }) {
+                val intervalFormat = stringResource(R.string.settings_auto_advance_interval)
+                LabeledStepper(stringResource(R.string.settings_auto_advance_interval_label), settings.autoPageTurnIntervalSeconds.toFloat(), 5f, 3f..60f, format = { intervalFormat.format(it.toInt()) }) {
                     viewModel.setAutoPageTurnIntervalSeconds(it.toInt())
                 }
             }
 
             SectionDivider()
-            Text("VSCode 읽기 위치 동기화", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_vscode_sync), style = MaterialTheme.typography.titleMedium)
             Text(
-                "VSCode에서 \"Moonkata Sync: QR로 연결\"로 뜬 QR을 스캔하거나, 공유 시크릿을 직접 붙여넣고 연결 테스트를 눌러 확인하세요.",
+                stringResource(R.string.settings_vscode_sync_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { showQrScanner = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("QR로 연결")
+                Text(stringResource(R.string.settings_connect_via_qr))
             }
             Spacer(Modifier.height(8.dp))
-            SyncSettingField("공유 시크릿", sharedSecretDraft, isSecret = true) {
+            SyncSettingField(stringResource(R.string.settings_shared_secret), sharedSecretDraft, isSecret = true) {
                 sharedSecretDraft = it
                 syncTestFailed = false
             }
@@ -270,16 +282,16 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
                     if (testingSync) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("연결 테스트")
+                        Text(stringResource(R.string.settings_test_connection))
                     }
                 }
                 when {
                     isVerified -> {
                         Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2E7D32))
-                        Text("연결됨", color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.settings_connected), color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodyMedium)
                     }
                     syncTestFailed -> Text(
-                        "연결 실패 — ${viewModel.lastSupabaseTestError() ?: "시크릿을 확인하세요"}",
+                        stringResource(R.string.settings_connection_failed, viewModel.lastSupabaseTestError() ?: stringResource(R.string.settings_check_secret)),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -297,9 +309,10 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
         ChapterPatternSheet(viewModel = viewModel, settings = settings, onDismiss = { showChapterPatterns = false })
     }
     if (showQrScanner) {
-        // QR 스캔 성공 시 시크릿을 채우고 바로 연결 테스트까지 자동 실행한다 — 스캔 한 번으로 끝나게.
-        // 잘못된 QR/모르는 type/권한 거부는 QrScannerDialog가 알아서 onDismiss로 닫아, 여기서는 아무
-        // 일도 안 하고 시트가 닫힌 뒤 사용자가 위 수동 입력 필드로 폴백할 수 있게 그대로 둔다.
+        // On a successful QR scan, fill in the secret and immediately auto-run the connection test —
+        // so one scan is all it takes. An invalid QR/unknown type/denied permission is already
+        // closed via onDismiss by QrScannerDialog itself, so we do nothing here and just let the
+        // user fall back to the manual field above once the sheet closes.
         QrScannerDialog(
             onResult = { payload ->
                 showQrScanner = false
@@ -319,9 +332,10 @@ private fun SectionDivider() {
 }
 
 /**
- * 순수 컨트롤드 필드 — DataStore에는 바로 안 쓰고, 상위(QuickSettingsSheet)가 들고 있는 로컬 초안
- * 상태만 갱신한다. 실제 커밋은 시트가 닫힐 때 한 번에 일어난다(매 키 입력마다 DataStore 왕복 쓰기가
- * 생기면 느리고, 그 응답으로 [settings]가 재emit될 때마다 입력 중인 커서 위치가 흐트러질 수 있어서다).
+ * A pure controlled field — doesn't write to DataStore directly, only updates the local draft state
+ * held by the parent (QuickSettingsSheet). The actual commit happens once, when the sheet closes
+ * (a DataStore round-trip write on every keystroke would be slow, and the cursor position could get
+ * disrupted each time [settings] re-emits in response while the user is still typing).
  */
 @Composable
 private fun SyncSettingField(label: String, value: String, isSecret: Boolean = false, onValueChange: (String) -> Unit) {
@@ -337,11 +351,12 @@ private fun SyncSettingField(label: String, value: String, isSecret: Boolean = f
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    // Row 전체를 toggleable로 감싼다 — 터치 영역이 스위치 썸(thumb)만큼 작은 걸 라벨까지 넓히고
-    // (Material 접근성 가이드), 그 결과로 라벨+스위치가 시맨틱 트리에서 하나로 병합돼(mergeDescendants)
-    // 라벨 텍스트만으로도 이 스위치를 정확히 찾아 조작할 수 있다 — 이 시트에 스위치가 여러 개라
-    // Row가 시맨틱 경계를 안 만들면(Row 자체는 기본적으로 그렇다) 전부 같은 부모 아래 형제로 평탄화돼,
-    // 라벨 텍스트 하나로 스위치를 구분할 방법이 없었다.
+    // Wrap the whole Row in toggleable — this widens the touch target from just the switch thumb
+    // (small) to the label too (Material accessibility guidance), and as a result the label+switch
+    // merge into one node in the semantics tree (mergeDescendants), so the switch can be found and
+    // operated by its label text alone. With several switches on this sheet, if the Row didn't form
+    // a semantic boundary (a plain Row doesn't, by default), they'd all flatten into siblings under
+    // the same parent with no way to tell them apart by label text alone.
     Row(
         Modifier
             .fillMaxWidth()
@@ -353,7 +368,7 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     }
 }
 
-/** +/- 버튼으로 값을 조절하는 수치 컨트롤 — 슬라이더보다 손가락으로 정확히 집기 쉽다. */
+/** A numeric control adjusted with +/- buttons — easier to hit precisely with a finger than a slider. */
 @Composable
 private fun LabeledStepper(
     label: String,
@@ -366,11 +381,11 @@ private fun LabeledStepper(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f))
         IconButton(onClick = { onValueChange((value - step).coerceIn(range)) }, enabled = value > range.start) {
-            Icon(Icons.Default.Remove, contentDescription = "$label 감소")
+            Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.settings_stepper_decrease_desc, label))
         }
         Text(format(value), modifier = Modifier.widthIn(min = 48.dp), textAlign = TextAlign.Center)
         IconButton(onClick = { onValueChange((value + step).coerceIn(range)) }, enabled = value < range.endInclusive) {
-            Icon(Icons.Default.Add, contentDescription = "$label 증가")
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.settings_stepper_increase_desc, label))
         }
     }
 }

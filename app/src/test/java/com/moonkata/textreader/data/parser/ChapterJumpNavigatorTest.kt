@@ -6,8 +6,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * 챕터 점프 N등분 breakpoint 계산과 다음/이전 탐색의 순수 로직 검증. Android 의존성이 전혀 없어
- * 기기/에뮬레이터 없이 JVM에서 바로 도는 일반 JUnit 테스트로 둔다(androidTest가 아님).
+ * Verifies the pure logic of chapter-jump N-way breakpoint calculation and next/previous
+ * navigation. Has no Android dependency at all, so it's a plain JUnit test that runs directly
+ * on the JVM without a device/emulator (not androidTest).
  */
 class ChapterJumpNavigatorTest {
 
@@ -18,14 +19,15 @@ class ChapterJumpNavigatorTest {
     )
     private val totalCharCount = 400
 
-    // 챕터 간 줄 수 임계값(20줄) 판정에 실제로 쓰이므로, 각 구간에 임계값을 넉넉히 넘는 줄바꿈을 채워둔다
-    // ("a\n" 반복 -> 2글자당 줄바꿈 1개, 100글자 구간이면 약 50줄).
+    // Actually used to evaluate the inter-chapter line-count threshold (20 lines), so each span
+    // is filled with enough line breaks to comfortably exceed the threshold
+    // ("a\n" repeated -> 1 line break per 2 chars, so a 100-char span is about 50 lines).
     private val text = "a\n".repeat(totalCharCount / 2)
 
     @Test
     fun breakpoints_divideEachChapterIntoEqualFractions() {
-        // 1장: 0~100(길이100) 4등분 -> 25,50,75,100 / 2장: 100~300(길이200) 4등분 -> 150,200,250,300
-        // 3장: 300~400(길이100, 마지막 챕터라 끝은 totalCharCount) 4등분 -> 325,350,375,400
+        // Chapter 1: 0~100 (length 100) split into 4 -> 25,50,75,100 / Chapter 2: 100~300 (length 200) split into 4 -> 150,200,250,300
+        // Chapter 3: 300~400 (length 100; being the last chapter, its end is totalCharCount) split into 4 -> 325,350,375,400
         val points = ChapterJumpNavigator.breakpoints(chapters, totalCharCount, divisions = 4, text = text)
 
         assertEquals(
@@ -40,7 +42,7 @@ class ChapterJumpNavigatorTest {
 
         assertEquals(25, ChapterJumpNavigator.nextBreakpoint(points, currentOffset = 0))
         assertEquals(50, ChapterJumpNavigator.nextBreakpoint(points, currentOffset = 25))
-        assertNull("마지막 지점 이후엔 다음이 없어야 함", ChapterJumpNavigator.nextBreakpoint(points, currentOffset = 400))
+        assertNull("There should be no next point after the last one", ChapterJumpNavigator.nextBreakpoint(points, currentOffset = 400))
     }
 
     @Test
@@ -49,7 +51,7 @@ class ChapterJumpNavigatorTest {
 
         assertEquals(375, ChapterJumpNavigator.previousBreakpoint(points, currentOffset = 400))
         assertEquals(350, ChapterJumpNavigator.previousBreakpoint(points, currentOffset = 375))
-        assertNull("첫 지점 이전엔 이전이 없어야 함", ChapterJumpNavigator.previousBreakpoint(points, currentOffset = 25))
+        assertNull("There should be no previous point before the first one", ChapterJumpNavigator.previousBreakpoint(points, currentOffset = 25))
     }
 
     @Test
@@ -60,12 +62,12 @@ class ChapterJumpNavigatorTest {
         repeat(points.size) {
             offset = ChapterJumpNavigator.nextBreakpoint(points, offset) ?: offset
         }
-        assertEquals("끝까지 다음을 반복하면 마지막 지점에 도착해야 함", points.last(), offset)
+        assertEquals("Repeating next() all the way through should land on the last point", points.last(), offset)
 
         repeat(points.size - 1) {
             offset = ChapterJumpNavigator.previousBreakpoint(points, offset) ?: offset
         }
-        assertEquals("마지막 지점에서 (지점 수 - 1)번 이전으로 돌아오면 첫 지점이어야 함", points.first(), offset)
+        assertEquals("Going back (point count - 1) times from the last point should reach the first point", points.first(), offset)
     }
 
     @Test
@@ -80,7 +82,8 @@ class ChapterJumpNavigatorTest {
 
     @Test
     fun zeroLengthTrailingChapter_isSkippedWithoutProducingBreakpoints() {
-        // 마지막 챕터가 책 끝과 같은 오프셋(길이 0)이면 나눌 구간이 없어 건너뛰어야 한다.
+        // If the last chapter has the same offset as the end of the book (length 0), there's no
+        // span to divide, so it should be skipped.
         val withZeroLengthTail = chapters + Chapter("4장(빈 챕터)", charOffset = totalCharCount)
         val points = ChapterJumpNavigator.breakpoints(withZeroLengthTail, totalCharCount, divisions = 4, text = text)
 
@@ -89,16 +92,18 @@ class ChapterJumpNavigatorTest {
 
     @Test
     fun chapterPatternsWithinLineThreshold_areNotSubdividedButJumpedStraightThrough() {
-        // .docs/IDEAS.md 예시: "## 추신: ..." 공지문 바로 다음 줄에 진짜 챕터 제목이 붙어 있는 경우 —
-        // 그 사이(0줄, 임계값 20줄 이하)는 등분하지 않고 챕터 패턴에서 챕터 패턴으로 곧장 건너뛴다.
+        // Example from .docs/IDEAS.md: when a real chapter title immediately follows a notice
+        // line like "## Postscript: ..." on the very next line — the gap between them (0 lines,
+        // at or below the 20-line threshold) is not subdivided; it jumps straight from one
+        // chapter pattern to the next.
         val closeChapters = listOf(
             Chapter("1장", charOffset = 0),
             Chapter("추신", charOffset = 100),
             Chapter("2장", charOffset = 110),
         )
         val closeTotalCharCount = 200
-        // [0,100): 줄바꿈 50개(임계값 초과, 정상 등분) / [100,110): 줄바꿈 0개(임계값 이하, 곧장 점프)
-        // [110,200): 마지막 챕터라 다음 패턴이 없어 줄 수와 무관하게 항상 정상 등분.
+        // [0,100): 50 line breaks (over the threshold, subdivided normally) / [100,110): 0 line breaks (at or below the threshold, jump straight through)
+        // [110,200): being the last chapter with no following pattern, it's always subdivided normally regardless of line count.
         val closeText = "a\n".repeat(50) + "b".repeat(10) + "c".repeat(90)
 
         val points = ChapterJumpNavigator.breakpoints(closeChapters, closeTotalCharCount, divisions = 4, text = closeText)

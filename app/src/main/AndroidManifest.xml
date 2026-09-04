@@ -2,13 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 무료 한글 폰트 다운로드 기능에만 사용 (그 외 모든 기능은 오프라인 동작) -->
+    <!-- Used only for the free Korean font download feature (every other feature works offline) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- PC 파일 동기화(.docs/PC_SYNC_SERVER_PLAN.md)의 로컬 서브넷 스캔용 — 현재 연결된 네트워크의
-         링크 정보(로컬 IP)를 얻는 데만 쓰고 그 외 트래픽 감청 등은 하지 않음 -->
+    <!-- For local-subnet scanning in PC file sync (.docs/PC_SYNC_SERVER_PLAN.md) — only used to get
+         link info (local IP) for the currently connected network, no other traffic inspection -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 동기화 페어링 QR 스캔용(.docs/SYNC_MULTIUSER_PLAN.md 스테이지 4) — 선택 기능이라 카메라 없는
-         기기도 앱을 설치할 수 있어야 해서 required="false"로 둔다. 권한 거부 시 수동 입력으로 폴백. -->
+    <!-- For sync-pairing QR scanning (.docs/SYNC_MULTIUSER_PLAN.md stage 4) — optional feature, so
+         required="false" lets devices with no camera still install the app. Falls back to manual
+         entry if the permission is denied. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
 

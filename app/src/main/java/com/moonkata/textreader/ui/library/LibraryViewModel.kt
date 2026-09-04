@@ -7,6 +7,7 @@ import com.moonkata.textreader.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
@@ -48,7 +49,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 폴더뷰에서 지금 들여다보고 있는 위치 한 칸 — 실제 SAF 폴더이거나 zip 아카이브 내부. */
+/** One step of where the folder view is currently looking — either a real SAF folder or inside a zip archive. */
 sealed class BrowseLocation {
     abstract val name: String
     data class Folder(val uri: Uri, override val name: String) : BrowseLocation()
@@ -63,7 +64,7 @@ private data class BrowseState(
     val sortOption: FolderSortOption = FolderSortOption.NAME_ASC,
 )
 
-/** PC 서버 "지금 동기화" 진행 상태 — `LibraryViewModel.pcSyncState`. */
+/** The PC server "sync now" progress state — `LibraryViewModel.pcSyncState`. */
 data class PcSyncUiState(
     val isSyncing: Boolean = false,
     val progress: PcSyncProgress? = null,
@@ -82,9 +83,9 @@ data class LibraryUiState(
 )
 
 /**
- * [bookRepository]/[settingsRepository]/[folderBrowser]는 생성자로 주입받는다 — 테스트가 실제 SAF
- * 권한이나 앱의 실제 Room DB 없이도 가짜 구현으로 갈아끼워서 폴더 탐색 시나리오를 검증할 수 있게 하기
- * 위함이다. 프로덕션 조립은 [LibraryViewModelFactory]가 담당한다.
+ * [bookRepository]/[settingsRepository]/[folderBrowser] are injected via the constructor — so tests
+ * can swap in fake implementations to verify folder-browsing scenarios without real SAF permissions
+ * or the app's real Room DB. Production wiring is handled by [LibraryViewModelFactory].
  */
 class LibraryViewModel(
     application: Application,
@@ -100,8 +101,9 @@ class LibraryViewModel(
     private val _openBookEvents = MutableSharedFlow<Long>(extraBufferCapacity = 1)
     val openBookEvents: SharedFlow<Long> = _openBookEvents
 
-    // 앱을 새로 켰을 때 딱 한 번만 "이어서 볼래요?"를 물어보기 위한 후보 — 사용자가 답하고 나면
-    // 같은 프로세스가 살아있는 동안(라이브러리로 돌아왔다 다시 읽어도)은 다시 뜨지 않는다.
+    // Candidate for the "resume reading?" prompt, asked exactly once per fresh app launch — once the
+    // user answers, it won't show again for as long as this process stays alive (even after
+    // navigating back to the library and re-reading).
     private val _resumeCandidate = MutableStateFlow<BookEntity?>(null)
     val resumeCandidate: StateFlow<BookEntity?> = _resumeCandidate
 
@@ -137,8 +139,9 @@ class LibraryViewModel(
         }
         viewModelScope.launch {
             val mostRecent = bookRepository.observeLibrary().first().firstOrNull()
-            // 파일이 삭제/이동됐거나 SAF 권한이 회수된 책은 후보에서 제외한다 — 그대로 후보로 올리면
-            // "계속 보기"를 눌렀을 때 파일을 열 수 없어 앱이 죽는다.
+            // Exclude a book whose file was deleted/moved or whose SAF permission was revoked from
+            // the candidate — leaving it as a candidate would crash the app when the file can't be
+            // opened after tapping "Continue".
             if (mostRecent?.lastOpenedAt != null && bookRepository.bookFileExists(mostRecent)) {
                 _resumeCandidate.value = mostRecent
             }
@@ -149,12 +152,14 @@ class LibraryViewModel(
     }
 
     /**
-     * 실기기 동기화 테스트 편의용(디버그 빌드 전용) — PC 동기화 호스트/시크릿, VSCode 공유 시크릿을
-     * 매번 QR 스캔이나 수동 입력 없이 미리 채워둔다. 값 자체는 local.properties의 DEBUG_PC_SYNC_HOST
-     * 등을 통해 개발자 PC에서만 주입되고(app/build.gradle.kts 참고), 릴리스 빌드에서는 항상 빈
-     * 문자열이라 이 함수가 아무 것도 하지 않는다. "검증됨" 상태까지는 안 채운다 — TOFU 지문 고정은
-     * 실제로 한 번 연결 테스트를 거쳐야 의미가 있으므로, 필드만 채워서 "연결 테스트" 한 번으로 끝나게만
-     * 한다. 이미 값이 있으면(사용자가 직접 설정했거나 이전에 이미 시드됨) 덮어쓰지 않는다.
+     * Real-device sync testing convenience (debug builds only) — pre-fills the PC sync host/secret
+     * and the VSCode shared secret without a QR scan or manual entry each time. The values themselves
+     * are injected only on the developer's PC via local.properties' DEBUG_PC_SYNC_HOST etc. (see
+     * app/build.gradle.kts), and are always an empty string in release builds, so this function does
+     * nothing there. Doesn't fill in the "verified" state — TOFU fingerprint pinning is only
+     * meaningful after an actual connection test, so this just fills the fields, leaving one
+     * "Test connection" tap to finish the job. Doesn't overwrite existing values (set by the user, or
+     * already seeded earlier).
      */
     private suspend fun seedDebugSyncDefaultsIfBlank() {
         val settings = settingsRepository.settingsFlow.first()
@@ -194,7 +199,7 @@ class LibraryViewModel(
         }
     }
 
-    /** true를 반환하면 상위 폴더로 이동함(호출자가 뒤로가기를 소비해야 함), false면 이미 최상위. */
+    /** Returns true if it moved to the parent folder (the caller should consume the back press), false if already at the top. */
     fun navigateUp(): Boolean {
         val path = _browseState.value.path
         if (path.size <= 1) return false
@@ -229,7 +234,7 @@ class LibraryViewModel(
 
     private fun openTextFile(entry: FolderEntry.TextFile) {
         viewModelScope.launch {
-            // zip 안 파일은 VSCode에서 직접 열리는 경로가 아니라 동기화 매칭 대상이 아님(§3) — 빈 값으로 둔다.
+            // A file inside a zip has no direct path VSCode could open, so it's not a sync-matching target (§3) — leave it blank.
             val relativePath = if (entry.source is BookSource.PlainTxt) {
                 val folderNames = _browseState.value.path.drop(1).map { it.name }
                 normalizeRelativePath(folderNames + entry.name)
@@ -241,25 +246,26 @@ class LibraryViewModel(
         }
     }
 
-    // --- PC 트레이 서버 파일 동기화 (.docs/PC_SYNC_SERVER_PLAN.md §3) ---
+    // --- PC tray server file sync (.docs/PC_SYNC_SERVER_PLAN.md §3) ---
 
-    /** 연결 테스트 없이 입력값만 임시 저장 — 시트가 닫힐 때 커밋하는 용도(Supabase 공유 시크릿과 동일 패턴). */
+    /** Stashes the input values without a connection test — committed when the sheet closes (same pattern as the Supabase shared secret). */
     fun updatePcSyncConnectionDraft(host: String, secret: String) {
         viewModelScope.launch { settingsRepository.updatePcSyncConnection(host, secret, verified = false) }
     }
 
     private var lastPcSyncTestError: String? = null
 
-    /** [PcSyncSheet]가 실패 문구에 그대로 보여준다 — VSCode 동기화 쪽과 같은 이유로 추가
-     * (.docs/SYNC_MULTIUSER_PLAN.md 참고). */
+    /** [PcSyncSheet] shows this verbatim in its failure message — added for the same reason as the
+     * VSCode sync side (see .docs/SYNC_MULTIUSER_PLAN.md). */
     fun lastPcSyncTestError(): String? = lastPcSyncTestError
 
-    /** 설정 화면 "연결 테스트" 버튼 — 성공하면 입력값을 검증 상태와 함께 커밋한다. 이때 받은 PC
-     * 인증서 지문도 같이 저장(TOFU) — 클라이언트를 pinnedFingerprint 없이(=아직 아무 인증서나 믿는
-     * 상태로) 만들어서, 실제로 받은 인증서를 그 자리에서 "이 PC"로 등록하는 셈이다. */
+    /** The settings screen's "Test connection" button — on success, commits the input values together
+     * with verified state. Also saves the PC certificate fingerprint received at that point (TOFU) —
+     * the client is built without a pinnedFingerprint (i.e. still trusting any certificate), so this
+     * amounts to registering whatever certificate is actually received, right there, as "this PC". */
     suspend fun testPcSyncConnection(host: String, secret: String): Boolean {
         if (host.isBlank() || secret.isBlank()) {
-            lastPcSyncTestError = "주소 또는 시크릿이 비어있음"
+            lastPcSyncTestError = getApplication<Application>().getString(R.string.library_pc_sync_secret_empty)
             return false
         }
         val client = PcSyncClient(host, secret)
@@ -271,19 +277,20 @@ class LibraryViewModel(
         return success
     }
 
-    /** "PC 찾기" 버튼 — 로컬 서브넷에서 PC 트레이 서버를 찾아 IP 목록을 돌려준다. */
+    /** The "Find PC" button — looks for the PC tray server on the local subnet and returns a list of IPs. */
     suspend fun scanForPcSyncHosts(): List<String> = PcHostScanner(getApplication()).scanLocalSubnet()
 
     /**
-     * QR 페어링(.docs/SYNC_MULTIUSER_PLAN.md 스테이지 6) 전용 — PC 트레이 서버의 `/pair` QR에는
-     * 호스트/시크릿뿐 아니라 인증서 지문도 이미 실려있다. 그래서 [testPcSyncConnection]처럼 먼저
-     * lenient TLS로 접속해 지문을 "그 자리에서 처음 본 값"으로 등록하는 TOFU 단계를 거칠 필요 없이,
-     * 처음부터 그 지문으로 pinned TLS 연결을 시도한다 — 성공하면 "QR이 알려준 서버가 실제로 그
-     * 인증서를 갖고 있다"까지 확인된 것이라 TOFU보다 신뢰 근거가 더 강하다.
+     * For QR pairing only (.docs/SYNC_MULTIUSER_PLAN.md stage 6) — the PC tray server's `/pair` QR
+     * already carries the certificate fingerprint, not just the host/secret. So unlike
+     * [testPcSyncConnection], there's no need for a TOFU step that first connects over lenient TLS to
+     * register the fingerprint as "the first value seen right now" — it attempts a pinned TLS
+     * connection with that fingerprint from the start. Success then means "the server the QR pointed
+     * to actually holds that certificate," which is a stronger basis of trust than TOFU.
      */
     suspend fun testPcSyncConnectionWithFingerprint(host: String, secret: String, fingerprint: String): Boolean {
         if (host.isBlank() || secret.isBlank() || fingerprint.isBlank()) {
-            lastPcSyncTestError = "QR 페이로드에 빈 값이 있음"
+            lastPcSyncTestError = getApplication<Application>().getString(R.string.library_pc_sync_qr_payload_empty)
             return false
         }
         val client = PcSyncClient(host, secret, fingerprint)
@@ -296,14 +303,16 @@ class LibraryViewModel(
     }
 
     /**
-     * "지금 동기화" 버튼 — 연결 테스트를 통과한 설정으로만 동작한다(Supabase 시크릿과 동일하게 "테스트
-     * 성공 시점의 값과 지금 설정값이 정확히 같을 때"만 검증된 것으로 침). 진행 상태는 [pcSyncState]로
-     * 노출되고, 끝나면 [PcSyncUiState.result] 또는 [PcSyncUiState.errorMessage]가 채워진다.
+     * The "Sync now" button — only works with settings that passed the connection test (verified the
+     * same way as the Supabase secret: only counts as verified when the current settings value
+     * exactly matches the value at the moment the test last succeeded). Progress is exposed via
+     * [pcSyncState], and [PcSyncUiState.result] or [PcSyncUiState.errorMessage] gets filled in once
+     * it finishes.
      */
     fun syncFromPc() {
         val rootUri = _browseState.value.rootUri
         if (rootUri == null) {
-            _pcSyncState.update { it.copy(errorMessage = "먼저 라이브러리 폴더를 선택하세요") }
+            _pcSyncState.update { it.copy(errorMessage = getApplication<Application>().getString(R.string.library_pc_sync_select_folder_first)) }
             return
         }
         viewModelScope.launch {
@@ -312,17 +321,17 @@ class LibraryViewModel(
                 settings.pcSyncHost == settings.pcSyncVerifiedHost &&
                 settings.pcSyncSecret == settings.pcSyncVerifiedSecret
             if (!verified) {
-                _pcSyncState.update { it.copy(errorMessage = "먼저 연결 테스트를 통과해야 합니다") }
+                _pcSyncState.update { it.copy(errorMessage = getApplication<Application>().getString(R.string.library_pc_sync_test_connection_first)) }
                 return@launch
             }
             _pcSyncState.update { PcSyncUiState(isSyncing = true) }
-            // 평소 동기화는 연결 테스트 때 저장해둔 지문으로 고정 검증한다(pinnedFingerprint 지정) —
-            // 그 지문과 다른 인증서를 내미는 서버는 거부된다.
+            // Regular syncs are pinned to the fingerprint saved during the connection test
+            // (pinnedFingerprint set) — a server presenting a different certificate is rejected.
             val client = PcSyncClient(settings.pcSyncHost, settings.pcSyncSecret, settings.pcSyncPinnedFingerprint)
             val manager = PcSyncFileManager(getApplication(), client)
-            // 지난번 동기화가 언제 끝났는지(이 기기 시계 기준) 넘겨서, 크기는 같지만 그 이후 PC에서
-            // 내용이 바뀐 파일도 다시 받게 한다(computeSyncDelta 참고). 0이면 한 번도 성공한 적 없다는
-            // 뜻이라 null로 넘겨 이 보정을 건너뛴다.
+            // Pass along when the last sync finished (this device's clock) so a file whose size is
+            // unchanged but that was modified on the PC afterward still gets re-downloaded (see
+            // computeSyncDelta). 0 means never succeeded yet, so pass null to skip this correction.
             val sinceMillis = settings.pcSyncLastCompletedAtMillis.takeIf { it > 0 }
             val syncStartedAt = System.currentTimeMillis()
             val result = manager.sync(rootUri, sinceMillis = sinceMillis) { progress ->
@@ -332,26 +341,29 @@ class LibraryViewModel(
                 if (result != null) {
                     it.copy(isSyncing = false, progress = null, result = result)
                 } else {
-                    it.copy(isSyncing = false, progress = null, errorMessage = "PC에 연결할 수 없습니다")
+                    it.copy(isSyncing = false, progress = null, errorMessage = getApplication<Application>().getString(R.string.library_pc_sync_cannot_connect))
                 }
             }
-            // 동기화가 지금 보고 있는 폴더 안의 파일을 바꿨을 수 있는데, 폴더뷰 목록은 처음 들어왔을 때
-            // 한 번만 읽어온 상태라 그대로 두면 새로 받은 파일이 화면엔 안 보인다(실기기 검증 중 확인) —
-            // 성공하면 지금 위치를 다시 읽어온다.
+            // The sync may have changed files inside the folder currently being viewed, but the
+            // folder-view listing was only read once when it was first entered — leaving it as-is
+            // means newly received files wouldn't show up on screen (confirmed during real-device
+            // testing) — re-read the current location on success.
             if (result != null) {
                 loadCurrent()
-                // 동기화 "끝난" 시각이 아니라 "시작한" 시각을 기준선으로 남긴다 — 동기화가 도는 동안(수
-                // 초~수십 초) PC에서 또 파일을 바꾸면 그 변경은 원격 mtime이 시작 시각보다 늦을 수 있어
-                // "끝난 시각"을 쓰면 다음 번에 놓친다.
+                // Records the sync's *start* time as the baseline, not when it finished — if the PC
+                // changes another file while the sync is running (a few seconds to tens of seconds),
+                // that change's remote mtime could be earlier than the finish time, and using the
+                // finish time would miss it next time.
                 settingsRepository.updatePcSyncLastCompletedAt(syncStartedAt)
             }
         }
     }
 
-    // --- SettingsController 구현 — 서재 화면에서도 QuickSettingsSheet를 그대로 재사용하기 위함.
-    // 열린 책이 없으니 값을 저장하는 것 이상의 부가 동작(ReaderViewModel의 TTS 즉시 시작, 방문 이력
-    // 초기화 등)은 하지 않는다 — 그건 나중에 실제로 책을 열었을 때 ReaderViewModel이 저장된 값을 읽어
-    // 알아서 적용한다. ---
+    // --- SettingsController implementation — so QuickSettingsSheet can be reused as-is from the
+    // library screen too. There's no open book here, so this does nothing beyond persisting values
+    // (no side effects like ReaderViewModel's immediate TTS start or resetting navigation history) —
+    // ReaderViewModel reads the saved values and applies them itself once a book is actually opened
+    // later. ---
     override fun setFontSizeSp(value: Float) = launchSetting { settingsRepository.updateFontSizeSp(value) }
     override fun setLineHeightMultiplier(value: Float) = launchSetting { settingsRepository.updateLineHeightMultiplier(value) }
     override fun setLetterSpacingSp(value: Float) = launchSetting { settingsRepository.updateLetterSpacingSp(value) }
@@ -403,7 +415,7 @@ class LibraryViewModel(
 
     override suspend fun testSupabaseConnection(secret: String): Boolean {
         if (secret.isBlank()) {
-            lastSupabaseTestError = "시크릿이 비어있음"
+            lastSupabaseTestError = getApplication<Application>().getString(R.string.library_supabase_secret_empty)
             return false
         }
         val client = ReadingPositionSyncClient(SupabaseConfig.URL, SupabaseConfig.PUBLISHABLE_KEY, secret)

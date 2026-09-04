@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -43,16 +44,19 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.sync.QrPairingPayload
 import java.util.concurrent.Executors
 
 /**
- * 카메라로 QR을 스캔해 동기화 페어링 정보를 읽어들이는 공용 컴포넌트(.docs/SYNC_MULTIUSER_PLAN.md
- * 스테이지 4). VSCode 읽기 위치 동기화(스테이지 5)와 PC 파일 동기화(스테이지 6) 두 페어링 흐름이
- * 공유한다 — QR 안의 `type` 필드로 어떤 종류인지 구분([QrPairingPayload] 참고).
+ * Shared component that scans a QR code with the camera to read sync pairing info
+ * (.docs/SYNC_MULTIUSER_PLAN.md stage 4). Shared by the VSCode reading-position sync pairing flow
+ * (stage 5) and the PC file-sync pairing flow (stage 6) — the `type` field inside the QR tells them
+ * apart (see [QrPairingPayload]).
  *
- * 카메라 권한이 없거나 거부되면 곧바로 [onDismiss]를 호출한다 — 호출한 쪽이 기존 수동 입력 필드로
- * 폴백하게 하기 위함(카메라 없는 폼팩터/권한 거부 대비, 계획 문서의 "1급 폴백 유지" 방침).
+ * Calls [onDismiss] immediately if the camera permission is missing or denied — so the caller falls
+ * back to its existing manual-entry field (for camera-less form factors / permission denial, per the
+ * plan doc's "always keep a first-class fallback" policy).
  */
 @Composable
 fun QrScannerDialog(
@@ -81,7 +85,7 @@ fun QrScannerDialog(
             if (hasCameraPermission) {
                 QrCameraPreview(lifecycleOwner = lifecycleOwner, onResult = onResult)
                 Text(
-                    "QR 코드를 화면 중앙에 맞춰주세요",
+                    stringResource(R.string.qr_align_hint),
                     color = Color.White,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp),
                 )
@@ -91,7 +95,7 @@ fun QrScannerDialog(
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "닫기", tint = Color.White)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.qr_close_desc), tint = Color.White)
             }
         }
     }
@@ -142,8 +146,8 @@ private fun QrCameraPreview(
                             analysis,
                         )
                     }
-                    // 카메라를 못 열면(다른 앱이 점유 중 등) 조용히 포기한다 — 사용자가 닫기 버튼으로
-                    // 나가면 호출한 쪽이 수동 입력으로 폴백한다.
+                    // Give up quietly if the camera can't be opened (another app has it, etc.) —
+                    // if the user backs out via the close button, the caller falls back to manual entry.
                 },
                 ContextCompat.getMainExecutor(ctx),
             )
@@ -152,7 +156,7 @@ private fun QrCameraPreview(
     )
 }
 
-/** 프레임 하나를 ML Kit에 넘겨 QR을 읽고, 우리가 기대하는 페이로드 형식이면 한 번만 [onPayload]를 부른다. */
+/** Hands one frame to ML Kit to read a QR code, calling [onPayload] exactly once if it matches the payload format we expect. */
 private fun processFrame(
     scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
     imageProxy: ImageProxy,

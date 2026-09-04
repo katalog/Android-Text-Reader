@@ -15,11 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.moonkata.textreader.R
 import com.moonkata.textreader.model.Chapter
 
-/** 목차를 열었을 때 지금 읽고 있는 챕터가 위쪽에 미리 보이도록 이만큼 앞에서부터 스크롤해둔다. */
+/** When the table of contents opens, scroll up by this many items so the chapter currently being read is already visible near the top. */
 private const val CONTEXT_CHAPTERS_ABOVE = 2
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,7 +29,7 @@ private const val CONTEXT_CHAPTERS_ABOVE = 2
 fun TocSheet(chapters: List<Chapter>, currentOffset: Int, onJump: (Int) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         if (chapters.isEmpty()) {
-            Text("목차를 찾을 수 없어요", modifier = Modifier.padding(24.dp))
+            Text(stringResource(R.string.toc_empty), modifier = Modifier.padding(24.dp))
         } else {
             val currentIndex = remember(chapters, currentOffset) {
                 chapters.indexOfLast { it.charOffset <= currentOffset }.coerceAtLeast(0)

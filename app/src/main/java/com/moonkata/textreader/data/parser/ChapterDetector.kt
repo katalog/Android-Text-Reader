@@ -4,7 +4,7 @@ import com.moonkata.textreader.model.Chapter
 
 object ChapterDetector {
 
-    /** 매칭 0건은 정상("목차 없음") 상태이지 에러가 아니다. */
+    /** Zero matches is a normal ("no table of contents") state, not an error. */
     fun detect(text: String, patterns: List<Regex>): List<Chapter> {
         if (patterns.isEmpty()) return emptyList()
         val chapters = mutableListOf<Chapter>()

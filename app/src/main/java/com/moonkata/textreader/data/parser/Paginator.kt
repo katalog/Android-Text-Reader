@@ -21,19 +21,21 @@ data class PaginationParams(
 )
 
 /**
- * 페이지에 들어갈 원문 구간(fullText의 substring)을 그대로 측정해 페이지 경계를 정한다.
- * 문단을 각각 따로 측정해서 높이를 더하는 방식은 쓰지 않는다 — 실제 렌더링(ReaderPagerContent)이
- * 페이지 전체를 하나의 Text로 그리는데, 여러 줄을 개별로 측정한 높이의 합이 그 전체를 한 번에
- * 측정한 높이와 항상 같지는 않아서(줄간격 계산 차이), 문단별 합산 방식은 실제보다 더 많이 들어간다고
- * 오판해 마지막 줄(들)이 페이지 밖으로 밀려 통째로 안 보이는 경우가 있었다.
+ * Determines page boundaries by measuring the exact source span (a substring of fullText) that
+ * will go on the page. It does not measure each paragraph separately and sum their heights —
+ * the actual rendering (ReaderPagerContent) draws the whole page as a single Text, and the sum
+ * of individually-measured line heights doesn't always equal the height of measuring them all at
+ * once (line-spacing rounding differs), so the per-paragraph-sum approach used to underestimate
+ * how much fits and push the last line(s) off the page entirely.
  */
 object Paginator {
 
     /**
-     * [fromOffset]부터 앞으로만 최대 [maxPages]페이지까지 계산한다.
-     * 오프셋을 포함하는 문단부터 새 페이지를 시작하므로, 책 전체를 처음부터 훑지 않고도
-     * 이어읽기 위치를 즉시 화면에 보여줄 수 있다 — 전체 페이지는 백그라운드에서 [paginate]로
-     * 다시 계산해 교체하기 전까지의 임시 표시용.
+     * Computes at most [maxPages] pages, moving forward only from [fromOffset].
+     * The new page starts at the paragraph containing the offset, so the resume position can be
+     * shown on screen immediately without scanning the whole book from the start — this is a
+     * temporary display used until the full page set is recomputed in the background via
+     * [paginate] and swapped in.
      */
     fun paginateFrom(
         fullText: String,
@@ -77,7 +79,7 @@ object Paginator {
         while (index < paragraphs.size) {
             val candidateEnd = paragraphs[index].endOffset
             if (candidateEnd <= pageStart) {
-                // 이미 이 페이지 시작점보다 앞서 끝나는 문단(빈 줄 등) — 건너뛴다.
+                // A paragraph that already ends before this page's start (e.g. a blank line) — skip it.
                 index++
                 continue
             }
@@ -90,35 +92,38 @@ object Paginator {
             )
 
             if (layout.size.height.toFloat() <= contentHeightPx) {
-                // 지금까지 페이지에 이 문단까지 포함해도 들어간다 — 다음 문단도 이어서 시도.
+                // Still fits on the page even with this paragraph included — try extending with the next one.
                 index++
                 if (index == paragraphs.size) {
                     pageBreaks += PageBreak(pageStart, candidateEnd)
                 }
             } else {
-                // 이 문단까지 포함하면 넘친다 — 실제로 몇 줄까지 들어가는지 계산해 그 지점에서 페이지를 닫는다.
+                // Including this paragraph overflows — figure out how many lines actually fit and close the page there.
                 var fitLines = 0
                 for (lineIndex in 0 until layout.lineCount) {
                     if (layout.getLineBottom(lineIndex) > contentHeightPx) break
                     fitLines = lineIndex + 1
                 }
-                if (fitLines == 0) fitLines = 1 // 한 줄도 안 들어가는 극단적 상황 방지(무한루프 방지)
+                if (fitLines == 0) fitLines = 1 // Guard against the extreme case where not even one line fits (avoids an infinite loop)
                 val splitAt = layout.getLineEnd(fitLines - 1, visibleEnd = true).coerceAtLeast(1)
                 val newPageEnd = (pageStart + splitAt).coerceAtMost(candidateEnd)
                 pageBreaks += PageBreak(pageStart, newPageEnd)
                 if (pageBreaks.size >= maxPages) return pageBreaks
-                // 빈 줄(문단 구분용 개행)이 다음 페이지 맨 위로 넘어가면 실제로는 없는 빈 줄이 화면 위쪽에
-                // 떠 보인다 — 새 페이지는 항상 개행을 건너뛰고 실제 글자부터 시작하게 한다.
+                // If a blank line (the newline separating paragraphs) carries over to the top of the next
+                // page, it looks like a stray blank line floating at the top even though it isn't really
+                // there — always skip newlines so a new page starts at actual text.
                 pageStart = skipLeadingBlankLines(fullText, newPageEnd)
-                // index는 그대로 — 같은 문단의 나머지를 다음 페이지에서 이어서 시도한다(위 스킵으로 그 사이
-                // 빈 문단들은 루프 맨 위의 "candidateEnd <= pageStart" 조건에 걸려 자동으로 건너뛰어진다).
+                // index is left as-is — the rest of the same paragraph is retried on the next page (any
+                // empty paragraphs in between get auto-skipped by the "candidateEnd <= pageStart" check
+                // at the top of the loop, thanks to the skip above).
             }
         }
 
         return pageBreaks
     }
 
-    /** [offset]부터 이어지는 개행 문자들을 건너뛴 위치를 반환한다 — 문단 구분용 빈 줄이 페이지 맨 위로 넘어가지 않게. */
+    /** Returns the position after skipping over consecutive newline characters starting at [offset] —
+     * so a paragraph-separator blank line never carries over to the top of a page. */
     private fun skipLeadingBlankLines(fullText: String, offset: Int): Int {
         var i = offset
         while (i < fullText.length && (fullText[i] == '\n' || fullText[i] == '\r')) i++
@@ -140,10 +145,12 @@ object Paginator {
     private const val BACKWARD_SEARCH_MIN_SPAN = 500
 
     /**
-     * "이전 페이지"를 방문 이력 없이(예: 점프 직후 첫 이전 클릭) 역산으로 추정한다.
-     * [endOffset]보다 [referenceSpanChars]만큼 앞에서부터 순방향으로 몇 페이지 계산해, endOffset
-     * 바로 앞에서 끝나는 페이지를 찾는다. 시작점을 잘못 추정해도(다음 페이지가 endOffset을 정확히
-     * 맞히지 못해도) 상관없다 — 이후 정방향으로 한 번이라도 넘기면 방문 이력이 정확한 값으로 채워진다.
+     * Estimates the "previous page" by working backward when there's no visit history to fall back on
+     * (e.g. the first "previous" tap right after a jump). Starts [referenceSpanChars] before
+     * [endOffset], paginates forward a few pages from there, and looks for the page that ends right
+     * before endOffset. It's fine if the starting point is a bad guess (the forward pages don't land
+     * exactly on endOffset) — once the user pages forward even once after this, the visit history
+     * gets filled in with exact values.
      */
     fun onePageEndingAt(
         fullText: String,
@@ -160,9 +167,9 @@ object Paginator {
             val forward = paginateFrom(fullText, paragraphs, candidateStart, textMeasurer, params, maxPages = BACKWARD_SEARCH_BATCH_PAGES)
             val match = forward.lastOrNull { it.endOffset <= endOffset }
             if (match != null && (match.endOffset == endOffset || candidateStart == 0)) return match
-            if (match != null && forward.last() != match) return match // endOffset 바로 앞에서 끊긴 페이지를 찾음
+            if (match != null && forward.last() != match) return match // Found the page that breaks right before endOffset
             if (candidateStart == 0) return match ?: forward.firstOrNull()
-            span *= 2 // 그 사이에 못 미쳤다 — 시작점을 더 앞으로 넓혀 재시도
+            span *= 2 // Didn't reach far enough — widen the starting point and retry
         }
         return null
     }

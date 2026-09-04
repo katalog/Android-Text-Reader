@@ -2,7 +2,7 @@ package com.moonkata.textreader.data.file
 
 import android.net.Uri
 
-/** 책 하나의 실제 파일 위치 — 순수 txt 파일이거나 zip 안에 들어있는 entry. */
+/** Where a book's actual file lives — either a plain txt file or an entry inside a zip. */
 sealed class BookSource {
     data class PlainTxt(val uri: Uri) : BookSource()
     data class ZipEntryTxt(val zipUri: Uri, val entryName: String) : BookSource()

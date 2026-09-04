@@ -25,12 +25,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 서재 화면에 열린 책이 없어도 설정(폰트/여백/테마/VSCode 동기화 등)을 바꿀 수 있어야 한다는 실사용
- * 피드백으로 추가 — 전에는 QuickSettingsSheet가 ReaderViewModel에 묶여있어서 책을 먼저 열지 않으면
- * 설정 화면 자체를 띄울 방법이 없었다(SettingsController 인터페이스 추출, LibraryViewModel도 구현).
- * 상단바 오른쪽 "설정" 아이콘을 눌러 시트가 뜨고, 거기서 바꾼 값이 실제로 DataStore에 저장되는지까지
- * 확인한다 — ReaderViewModel 경유가 아니라 LibraryViewModel 경유로 저장되는 새 경로라 별도 검증이
- * 필요하다.
+ * Added based on real-world feedback that settings (font/margins/theme/VSCode sync, etc.) should
+ * be changeable from the library screen even with no book open — previously QuickSettingsSheet
+ * was tied to ReaderViewModel, so there was no way to bring up the settings screen at all without
+ * first opening a book (extracted the SettingsController interface, which LibraryViewModel now
+ * also implements). Verifies that tapping the "Settings" icon in the top-right of the top bar
+ * brings up the sheet, and that a value changed there is actually persisted to DataStore — this is
+ * a new path that saves via LibraryViewModel rather than via ReaderViewModel, so it needs separate
+ * verification.
  */
 @RunWith(AndroidJUnit4::class)
 class LibraryScreenSettingsAccessTest {
@@ -80,18 +82,18 @@ class LibraryScreenSettingsAccessTest {
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.entries.isNotEmpty() }
             composeTestRule.waitForIdle()
 
-            // 열린 책이 없는 상태 그대로 — 설정 아이콘이 있고 누르면 시트가 뜬다.
-            composeTestRule.onNodeWithContentDescription("설정").performClick()
+            // Still no book open — the settings icon is there and pressing it brings up the sheet.
+            composeTestRule.onNodeWithContentDescription("Settings").performClick()
             composeTestRule.waitForIdle()
-            composeTestRule.onNodeWithText("글자").assertExists()
+            composeTestRule.onNodeWithText("Font").assertExists()
 
-            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "크기 증가" else "크기 감소"
+            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "Increase Size" else "Decrease Size"
             composeTestRule.onNodeWithContentDescription(fontSizeButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.fontSizeSp == targetFontSize }
 
             val persisted = runBlocking { settingsRepository.settingsFlow.first() }
             assertEquals(
-                "서재 화면에서 바꾼 설정도 LibraryViewModel을 거쳐 DataStore에 저장돼야 함",
+                "Settings changed from the library screen must also be persisted to DataStore via LibraryViewModel",
                 targetFontSize,
                 persisted.fontSizeSp,
             )

@@ -12,8 +12,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 목차 시트를 열면 지금 읽고 있는 챕터가 수동 스크롤 없이 바로 화면에 보여야 한다(자동 스크롤) —
- * 챕터가 많은 실제 소설에서 목차를 열 때마다 맨 위부터 스크롤해야 했던 문제의 회귀 테스트.
+ * Opening the table-of-contents sheet must show the chapter currently being read immediately,
+ * without manual scrolling (auto-scroll) — a regression test for the issue where, in a real novel
+ * with many chapters, the TOC had to be scrolled from the top every time it was opened.
  */
 @RunWith(AndroidJUnit4::class)
 class TocSheetAutoScrollTest {
@@ -24,8 +25,9 @@ class TocSheetAutoScrollTest {
     @Test
     fun openingToc_scrollsToCurrentChapterWithoutManualScroll_andJumpsOnClick() {
         val chapters = (1..100).map { Chapter(title = "제${it}장", charOffset = it * 1000) }
-        // 현재 위치는 60번째 챕터 한가운데 — 자동 스크롤이 없다면 맨 위(1번째)부터 보여서
-        // LazyColumn이 화면 밖 항목까지 조립하지 않는 한 "제60장"은 아예 안 보여야 정상이다.
+        // The current position is in the middle of chapter 60 — without auto-scroll, it would show
+        // starting from the top (chapter 1), so "Chapter 60" should normally not be visible at all
+        // unless the LazyColumn happens to compose off-screen items too.
         val currentOffset = chapters[59].charOffset + 500
         var jumpedTo: Int? = null
 
@@ -55,6 +57,6 @@ class TocSheetAutoScrollTest {
             }
         }
 
-        composeTestRule.onNodeWithText("목차를 찾을 수 없어요").assertExists()
+        composeTestRule.onNodeWithText("No table of contents found").assertExists()
     }
 }

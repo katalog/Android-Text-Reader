@@ -21,9 +21,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 정렬 옵션이 uiState.entries의 순서를 실제로 바꾸는지 확인한다. 폴더 목록은 [FakeFolderBrowser]가
- * 주는 가짜 항목이면 충분하다 — 파일을 실제로 열어보는 게 아니라 목록 순서만 검증하는 테스트라
- * 실제 소설 픽스처는 필요 없다.
+ * Confirms that the sort option actually changes the order of uiState.entries. Fake entries from
+ * [FakeFolderBrowser] are enough for the folder list — since this only verifies list order rather
+ * than actually opening files, no real novel fixture is needed.
  */
 @RunWith(AndroidJUnit4::class)
 class LibrarySortOptionsTest {
@@ -70,13 +70,14 @@ class LibrarySortOptionsTest {
 
         fun namesAfter(option: FolderSortOption): List<String> {
             composeTestRule.runOnUiThread { viewModel.setSortOption(option) }
-            // sortOption 변경이 combine 파이프라인을 거쳐 uiState에 실제로 반영될 때까지 기다린다
-            // (waitForIdle만으로는 별도 코루틴으로 처리되는 combine 갱신이 끝났다는 보장이 없다).
+            // Wait until the sortOption change actually propagates to uiState through the combine
+            // pipeline (waitForIdle alone doesn't guarantee the combine update, handled in a
+            // separate coroutine, has finished).
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.sortOption == option }
             return viewModel.uiState.value.entries.map { it.name }
         }
 
-        // 이름 정렬은 대소문자를 구분하지 않는다(lowercase 비교) — apple/Banana/Cherry 순.
+        // Name sorting is case-insensitive (compared as lowercase) — order is apple/Banana/Cherry.
         assertEquals(listOf("apple.txt", "Banana.txt", "Cherry.txt"), namesAfter(FolderSortOption.NAME_ASC))
         assertEquals(listOf("Cherry.txt", "Banana.txt", "apple.txt"), namesAfter(FolderSortOption.NAME_DESC))
         assertEquals(listOf("Banana.txt", "Cherry.txt", "apple.txt"), namesAfter(FolderSortOption.SIZE_DESC))

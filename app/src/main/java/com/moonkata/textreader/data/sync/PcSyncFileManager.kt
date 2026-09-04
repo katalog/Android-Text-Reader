@@ -6,7 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 지금 처리 중인 파일 하나에 대한 진행 상태 — UI가 "N / 전체" 표시에 쓴다. */
+/** Progress state for the single file currently being processed — the UI uses this for the "N / total" display. */
 data class PcSyncProgress(val completed: Int, val total: Int, val currentRelativePath: String)
 
 data class PcSyncResult(
@@ -16,27 +16,33 @@ data class PcSyncResult(
     val failed: Int,
 )
 
-/** [computeSyncDelta]의 결과 — 받아야(새로 만들거나 덮어써야) 할 원격 파일과, 지워야 할 로컬 파일. */
+/** Result of [computeSyncDelta] — remote files that need to be received (created or overwritten), and local files that need to be deleted. */
 data class PcSyncDelta(val toWrite: List<PcRemoteFile>, val toDelete: List<LocalLibraryFile>)
 
 /**
- * 원격/로컬 파일 목록만으로 동기화 델타를 계산하는 순수 함수 — I/O(다운로드/삭제)는 하지 않는다.
- * 단방향(PC → 폰)이라 로컬은 항상 원격의 거울: 원격에만 있으면 받고(toWrite), 크기가 다르면 다시
- * 받고(toWrite), 로컬에만 있으면 지운다(toDelete). 비교 키는 [normalizeRelativePath]로 정규화해서
- * VSCode 동기화 때 이미 검증된 대소문자/유니코드/구분자 규칙과 일치시킨다 — 다만 [PcSyncDelta]에 담기는
- * 값 자체는 원본 대소문자 그대로의 경로다(정규화된 키는 비교 전용, 실제 파일명을 바꾸면 안 되므로).
+ * Pure function that computes the sync delta from remote/local file listings alone — it does no I/O
+ * (download/delete). Because this is one-way (PC → phone), local is always meant to mirror remote: if a
+ * file exists only remotely, receive it (toWrite); if the size differs, receive it again (toWrite); if it
+ * exists only locally, delete it (toDelete). Comparison keys are normalized with [normalizeRelativePath]
+ * to match the case/Unicode/separator rules already validated for VSCode sync — however, the values held
+ * in [PcSyncDelta] itself keep the original, un-normalized-case paths (the normalized key is comparison-only;
+ * the actual file name must never be altered).
  *
- * 크기만 비교하고 로컬 수정시각은 보지 않는다 — 다운로드한 로컬 파일의 수정시각은 "받은 시점"이 되지 PC
- * 원본의 수정시각을 그대로 못 물려받는다(SAF가 문서 수정시각을 임의로 설정하게 허용 안 하는 제공자가
- * 많음). 로컬 수정시각까지 비교 조건에 넣으면 재동기화 때마다 로컬 시각과 원격 시각이(내용은 그대로인데도)
- * 항상 달라서 안 바뀐 파일까지 매번 전부 다시 받는 문제가 실사용 중 확인됐다. 소설 텍스트 파일은 내용이
- * 바뀌면 거의 항상 글자 수(=크기)도 같이 바뀌니 크기만으로도 실용적으로 충분하다.
+ * Only size is compared, not local modification time — a downloaded local file's modification time
+ * becomes "the moment it was received," not the original modification time on the PC (many SAF providers
+ * don't allow a document's modification time to be set arbitrarily). Including local modification time in
+ * the comparison was found in real usage to always differ between local and remote timestamps on every
+ * resync (even when content was unchanged), causing every unchanged file to be re-downloaded every time.
+ * For novel text files, a content change almost always changes the character count (= size) too, so size
+ * alone is practically sufficient.
  *
- * 다만 크기만 보면 "글자 수는 그대로인 내용 수정"(예: 오탈자 한 글자를 다른 글자로 교체)을 영원히
- * 놓친다. 이건 로컬 mtime과 달리 신뢰할 수 있는 [sinceMillis](마지막으로 동기화를 완료한 시각, PC가
- * 아니라 이 기기 자신의 시계 기준)와 원격이 보고한 [PcRemoteFile.lastModifiedMillis]를 비교해서 보완한다
- * — 크기가 같아도 원격 수정시각이 그 이후면 "그때 이후 PC에서 바뀐 파일"로 보고 다시 받는다. null이면
- * (한 번도 동기화한 적 없음) 이 보정을 적용하지 않는다.
+ * That said, comparing size alone will forever miss "a content edit that keeps the same character count"
+ * (e.g. replacing one typo character with another of the same length). Unlike local mtime, this is
+ * compensated for by comparing the trustworthy [sinceMillis] (the time this device's own clock recorded
+ * the last successful sync completion, not the PC's clock) against the remote-reported
+ * [PcRemoteFile.lastModifiedMillis] — even if the size matches, if the remote modification time is after
+ * that, it's treated as "changed on the PC since then" and re-downloaded. If null (never synced before),
+ * this adjustment is not applied.
  */
 fun computeSyncDelta(remoteFiles: List<PcRemoteFile>, localFiles: List<LocalLibraryFile>, sinceMillis: Long? = null): PcSyncDelta {
     val remoteByKey = remoteFiles.associateBy { syncDeltaKeyOf(it.relativePath) }
@@ -56,8 +62,8 @@ fun computeSyncDelta(remoteFiles: List<PcRemoteFile>, localFiles: List<LocalLibr
 private fun syncDeltaKeyOf(relativePath: String): String = normalizeRelativePath(relativePath.split("/"))
 
 /**
- * PC 트레이 서버 동기화 — 델타 계산([computeSyncDelta])과 실제 로컬(SAF) 반영을 잇는다 —
- * .docs/PC_SYNC_SERVER_PLAN.md §3.
+ * PC tray server sync — connects delta computation ([computeSyncDelta]) with actually applying it to the
+ * local (SAF) tree — .docs/PC_SYNC_SERVER_PLAN.md §3.
  */
 class PcSyncFileManager(
     private val context: Context,
@@ -65,15 +71,17 @@ class PcSyncFileManager(
     private val localScanner: LocalLibraryScanner = LocalLibraryScanner(context),
 ) {
     /**
-     * 실패(원격 목록 조회 자체가 안 됨, 또는 [treeUri]가 더 이상 유효하지 않음)하면 null. 개별 파일
-     * 단위 실패는 [PcSyncResult.failed]로 집계된다 — SAF 쪽 예외(예: 폴더 생성 도중 이름 충돌, 순회
-     * 도중 다른 항목이 사라짐 등 예상 못한 provider별 동작)가 한 파일에서 나도 나머지 파일 처리와 전체
-     * 동기화 결과 보고는 계속 진행돼야 하므로, 파일 단위 작업은 전부 [runCatching]으로 감싼다 — 폴더
-     * 이동/삭제/재구성처럼 한 번의 동기화 안에 여러 변경이 뒤섞여 들어와도 그중 하나가 앱을 죽이면 안
-     * 된다.
+     * Returns null on failure (the remote listing itself couldn't be fetched, or [treeUri] is no longer
+     * valid). Per-file failures are aggregated into [PcSyncResult.failed] instead — even if a single file
+     * throws an SAF-side exception (e.g. a name collision while creating a folder, another entry
+     * disappearing mid-traversal, or other unexpected provider-specific behavior), processing of the
+     * remaining files and the overall sync result report must still proceed, so every per-file operation
+     * is wrapped in [runCatching] — when several changes (folder moves/deletes/restructures) are mixed
+     * into a single sync, one of them must not be allowed to crash the app.
      *
-     * [sinceMillis]는 [computeSyncDelta] 참고 — 마지막으로 이 동기화가 성공적으로 끝난 시각(이 기기
-     * 시계 기준)을 넘겨주면 크기가 같아도 그 이후 원격에서 바뀐 파일을 다시 받는다.
+     * See [computeSyncDelta] for [sinceMillis] — passing the time this sync last completed successfully
+     * (per this device's clock) causes files changed remotely after that time to be re-downloaded even if
+     * their size matches.
      */
     suspend fun sync(treeUri: Uri, sinceMillis: Long? = null, onProgress: (PcSyncProgress) -> Unit = {}): PcSyncResult? = withContext(Dispatchers.IO) {
         val remoteFiles = client.listFilesRecursively() ?: return@withContext null
@@ -113,8 +121,9 @@ class PcSyncFileManager(
             val success = runCatching { DocumentFile.fromSingleUri(context, local.documentUri)?.delete() == true }.getOrDefault(false)
             if (success) {
                 deleted++
-                // PC에서 폴더째로 옮기거나 지운 경우 남는 빈 폴더 껍데기를 정리 — 실패해도(다른 파일이
-                // 남아있어 안 비었거나, provider가 삭제를 거부) 전체 결과에는 영향 없다.
+                // Clean up any now-empty folder shells left behind when a whole folder was moved or
+                // deleted on the PC — failing (because another file remains and it's not actually empty,
+                // or the provider refuses the delete) doesn't affect the overall result.
                 runCatching { pruneNowEmptyAncestors(root, local.relativePath) }
             } else {
                 failed++
@@ -125,8 +134,9 @@ class PcSyncFileManager(
         PcSyncResult(downloaded, updated, deleted, failed)
     }
 
-    /** 기존 로컬 파일의 documentUri를 그대로 유지한 채 내용만 갱신 — `BookEntity`가 그 URI로 읽던
-     * 위치를 계속 참조하므로, 지우고 새로 만들면 그 기록이 고아가 된다. */
+    /** Updates an existing local file's contents in place while keeping its documentUri unchanged —
+     * `BookEntity` keeps referencing the reading position via that URI, so deleting and recreating the
+     * file would orphan that record. */
     private suspend fun writeIntoExisting(uri: Uri, remote: PcRemoteFile): Boolean {
         val output = runCatching { context.contentResolver.openOutputStream(uri, "wt") }.getOrNull() ?: return false
         return output.use { client.downloadFile(remote.relativePath, it) }
@@ -155,10 +165,11 @@ class PcSyncFileManager(
         return current
     }
 
-    /** [deletedRelativePath] 파일을 막 지운 뒤 호출 — 그 파일이 있던 폴더가 이제 비었으면 지우고, 그
-     * 상위 폴더도 비었으면 마저 지우는 식으로 [root] 바로 아래까지(포함하지 않음) 거슬러 올라간다.
-     * 실제로 빈 폴더만 지우므로 다른 파일이 하나라도 남아 있으면 그 지점에서 멈춘다 — "폴더+파일 삭제",
-     * "하위 폴더 재구성" 뒤에도 빈 폴더 껍데기가 로컬에 계속 남는 문제 방지. */
+    /** Call this right after deleting the file at [deletedRelativePath] — if the folder that held it is
+     * now empty, delete it too, and keep walking up to (but not including) [root] as long as each parent
+     * folder is also empty. Only genuinely empty folders are deleted, so this stops as soon as any file
+     * remains — this prevents empty folder shells from lingering locally after a "delete folder and its
+     * files" or "restructure a subfolder" operation on the PC. */
     private fun pruneNowEmptyAncestors(root: DocumentFile, deletedRelativePath: String) {
         val folderSegments = deletedRelativePath.split("/").dropLast(1)
         if (folderSegments.isEmpty()) return

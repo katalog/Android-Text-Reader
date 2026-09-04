@@ -27,7 +27,7 @@ class TtsController(
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
                     override fun onDone(utteranceId: String?) {
-                        // 이 콜백은 TTS 내부 스레드에서 호출됨 — 호출자가 메인 스레드로 마샬링해야 함
+                        // This callback is invoked on TTS's internal thread — the caller must marshal to the main thread
                         utteranceId?.let(onUtteranceDone)
                     }
 

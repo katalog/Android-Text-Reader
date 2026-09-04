@@ -15,10 +15,10 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * `SafFolderBrowser.listZipEntries`는 테스트가 하나도 없었다 — `listFolder`는 진짜 SAF 트리 URI가
- * 있어야 해서(`DocumentFile.fromTreeUri`) 자동화하기 어렵지만(그래서 `FakeFolderBrowser`로 대체),
- * `listZipEntries`는 `contentResolver.openInputStream`만 쓰기 때문에 `file://` URI로도 실제 로직을
- * 그대로 검증할 수 있다.
+ * `SafFolderBrowser.listZipEntries` had no tests at all — `listFolder` needs a real SAF tree URI
+ * (`DocumentFile.fromTreeUri`), which makes it hard to automate (hence substituting
+ * `FakeFolderBrowser` for it), but `listZipEntries` only uses
+ * `contentResolver.openInputStream`, so the real logic can be verified as-is with a `file://` URI too.
  */
 @RunWith(AndroidJUnit4::class)
 class SafFolderBrowserTest {
@@ -27,12 +27,13 @@ class SafFolderBrowserTest {
     private val browser = SafFolderBrowser(application)
 
     /**
-     * STORED(비압축) 방식으로 크기/CRC를 미리 계산해 로컬 헤더에 바로 써넣는다 — DEFLATED로 그냥
-     * 스트리밍해서 쓰면(ZipOutputStream 기본값) 자바가 data descriptor(데이터 뒤에 크기를 붙이는
-     * 방식)를 쓰는 경우가 있어, ZipInputStream으로 앞에서부터 읽을 때(`listZipEntries`가 하는 그대로)
-     * 아직 그 엔트리의 바이트를 다 안 읽은 시점엔 `ZipEntry.size`가 -1(모름)일 수 있다. 실제 배포되는
-     * zip 도구들은 스트리밍이 아니라 파일 크기를 미리 알고 쓰므로 이 문제가 거의 없지만, 테스트에서
-     * `size`를 검증하려면 그 경로를 피해야 한다.
+     * Precomputes size/CRC and writes them straight into the local header using STORED
+     * (uncompressed) mode — if it were just streamed out as DEFLATED (ZipOutputStream's default),
+     * Java can end up using a data descriptor (a scheme that appends the size after the data), so
+     * when reading from the front with ZipInputStream (exactly what `listZipEntries` does),
+     * `ZipEntry.size` can be -1 (unknown) at a point where that entry's bytes haven't all been read
+     * yet. Real-world zip tools rarely hit this since they know the file size up front rather than
+     * streaming, but tests that need to verify `size` must avoid that path.
      */
     private fun zipFile(vararg entries: Pair<String, String>): File {
         val file = File.createTempFile("saf_zip_test", ".zip", application.cacheDir)

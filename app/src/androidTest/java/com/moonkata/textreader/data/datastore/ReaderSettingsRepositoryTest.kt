@@ -13,11 +13,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * `ReaderSettingsRepository`는 다른 시트 테스트들을 통해서만 간접적으로 exercise돼 왔다. 여기서는
- * 저장소 자체가 직접 겨냥 대상이다 — 대표적인 타입(String/Float/Boolean/Int/enum/Set)의 왕복 저장과,
- * 단순 왕복이 아니라 실제 조건부 로직이 있는 `updateSupabaseSharedSecret`/`updatePcSyncConnection`을
- * 검증한다. 실기기의 실제 DataStore 파일을 그대로 쓰므로, 건드리는 필드는 전부 시작 전 값을 기억해뒀다가
- * 끝나면 복원한다.
+ * `ReaderSettingsRepository` has only ever been exercised indirectly, through the other sheet
+ * tests. Here, the repository itself is the direct target — verifying round-trip storage of
+ * representative types (String/Float/Boolean/Int/enum/Set), plus
+ * `updateSupabaseSharedSecret`/`updatePcSyncConnection`, which have real conditional logic rather
+ * than a simple round trip. Uses the real device's actual DataStore file, so every field touched
+ * has its starting value remembered and restored at the end.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderSettingsRepositoryTest {
@@ -96,7 +97,7 @@ class ReaderSettingsRepositoryTest {
         repository.updateLastUsedSafTreeUri(null)
 
         assertNull(
-            "null을 넘기면 키 자체가 제거돼야 함 — 기본값(null)으로 안전하게 폴백",
+            "Passing null must remove the key itself — safely falls back to the default (null)",
             repository.settingsFlow.first().lastUsedSafTreeUri,
         )
     }
@@ -106,13 +107,14 @@ class ReaderSettingsRepositoryTest {
         repository.updateSupabaseSharedSecret("first-secret", verifiedSecret = "first-secret")
         assertEquals("first-secret", repository.settingsFlow.first().supabaseVerifiedSecret)
 
-        // verifiedSecret을 안 넘기면(예: 시크릿만 고치고 아직 연결 테스트는 안 한 상태) 검증된 값은
-        // 그대로여야 한다 — "연결됨" 배지가 잘못 남거나 잘못 사라지면 안 되므로.
+        // When verifiedSecret isn't passed (e.g. only the secret was edited but the connection
+        // test hasn't been run yet), the verified value must stay unchanged — the "Connected"
+        // badge must not incorrectly linger or incorrectly disappear.
         repository.updateSupabaseSharedSecret("second-secret", verifiedSecret = null)
 
         val settings = repository.settingsFlow.first()
         assertEquals("second-secret", settings.supabaseSharedSecret)
-        assertEquals("verifiedSecret 없이 부르면 검증된 값은 안 바뀌어야 함", "first-secret", settings.supabaseVerifiedSecret)
+        assertEquals("Calling without verifiedSecret must not change the verified value", "first-secret", settings.supabaseVerifiedSecret)
     }
 
     @Test
@@ -130,14 +132,15 @@ class ReaderSettingsRepositoryTest {
         assertEquals("192.168.0.1", afterVerified.pcSyncVerifiedHost)
         assertEquals("AA:BB", afterVerified.pcSyncPinnedFingerprint)
 
-        // 시크릿만 다시 고쳐본 것(연결 테스트는 아직 다시 안 함) — draft는 바뀌지만 검증된 값/지문은
-        // 이전 값 그대로 남아있어야 "연결됨" 판정이 draft와 자동으로 어긋난다.
+        // Only the secret was edited again (the connection test hasn't been rerun yet) — the draft
+        // changes, but the verified value/fingerprint must remain at their previous values, so the
+        // "Connected" judgment automatically falls out of sync with the draft.
         repository.updatePcSyncConnection("192.168.0.1", "secret-b", verified = false)
 
         val settings = repository.settingsFlow.first()
         assertEquals("secret-b", settings.pcSyncSecret)
-        assertEquals("변경 안 됨 — verified=false는 검증된 필드를 안 건드림", "secret-a", settings.pcSyncVerifiedSecret)
-        assertEquals("변경 안 됨 — verified=false는 지문도 안 건드림", "AA:BB", settings.pcSyncPinnedFingerprint)
+        assertEquals("Unchanged — verified=false must not touch the verified field", "secret-a", settings.pcSyncVerifiedSecret)
+        assertEquals("Unchanged — verified=false must not touch the fingerprint either", "AA:BB", settings.pcSyncPinnedFingerprint)
     }
 
     @Test
@@ -146,7 +149,7 @@ class ReaderSettingsRepositoryTest {
         repository.updatePcSyncConnection("192.168.0.2", "secret", verified = true, fingerprint = null)
 
         assertEquals(
-            "fingerprint가 null이면(호출부가 안 넘긴 경우) 이전 지문을 지우면 안 됨",
+            "When fingerprint is null (the caller didn't pass one), the previous fingerprint must not be erased",
             "OLD:FINGERPRINT",
             repository.settingsFlow.first().pcSyncPinnedFingerprint,
         )

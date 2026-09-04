@@ -13,7 +13,7 @@ import com.moonkata.textreader.ui.theme.TextReaderTheme
 
 class MainActivity : ComponentActivity() {
 
-    /** [ReaderScreen]이 켜져 있을 때만 등록되는 볼륨키 핸들러. true를 반환하면 이벤트를 소비(시스템 볼륨 토스트 억제). */
+    /** Volume key handler registered only while [ReaderScreen] is active. Returning true consumes the event (suppresses the system volume toast). */
     var volumeKeyHandler: ((Int) -> Boolean)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -3,14 +3,16 @@ package com.moonkata.textreader.data.file
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.moonkata.textreader.R
 import com.moonkata.textreader.model.FolderEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.zip.ZipInputStream
 
 /**
- * 폴더 탐색기가 필요로 하는 기능 — SAF 실물(`SafFolderBrowser`)과, 테스트에서 실제 SAF 권한 없이
- * 미리 정해둔 목록을 돌려주는 가짜 구현을 같은 자리에 끼워 넣을 수 있게 인터페이스로 분리한다.
+ * The capability a folder browser needs to provide — split out as an interface so the real SAF-backed
+ * implementation (`SafFolderBrowser`) and a fake that returns a fixed list without real SAF
+ * permissions (for tests) can be swapped in interchangeably.
  */
 interface FolderBrowser {
     fun rootDisplayName(treeUri: Uri): String
@@ -18,10 +20,10 @@ interface FolderBrowser {
     suspend fun listZipEntries(zipUri: Uri): List<FolderEntry.TextFile>
 }
 
-/** SAF 트리를 폴더 단위로 한 단계씩 나열 — 전체 재귀 스캔 대신 현재 위치의 자식만 조회. */
+/** Lists an SAF tree one folder level at a time — queries only the current location's children instead of a full recursive scan. */
 class SafFolderBrowser(private val context: Context) : FolderBrowser {
 
-    override fun rootDisplayName(treeUri: Uri): String = DocumentFile.fromTreeUri(context, treeUri)?.name ?: "루트"
+    override fun rootDisplayName(treeUri: Uri): String = DocumentFile.fromTreeUri(context, treeUri)?.name ?: context.getString(R.string.folder_root_fallback_name)
 
     override suspend fun listFolder(folderUri: Uri): List<FolderEntry> = withContext(Dispatchers.IO) {
         val dir = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
@@ -68,7 +70,7 @@ class SafFolderBrowser(private val context: Context) : FolderBrowser {
                 }
             }
         } catch (e: Exception) {
-            // 손상되었거나 지원하지 않는 zip — 빈 목록으로 처리
+            // Corrupted or unsupported zip — treat as an empty list
         }
         entries
     }

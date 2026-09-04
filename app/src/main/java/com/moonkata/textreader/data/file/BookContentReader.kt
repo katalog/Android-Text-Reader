@@ -19,17 +19,18 @@ object BookContentReader {
     }
 
     /**
-     * [source]가 실제로 열 수 있는 상태인지 확인한다 — 파일이 삭제/이동되었거나 SAF 권한이 회수되면
-     * false. "이어서 읽기" 후보를 띄우기 전에 미리 확인하는 용도: 확인 없이 바로 읽으려 들면
-     * `openInputStream`이 `FileNotFoundException`/`SecurityException`을 던져 잡는 곳 없이 앱이
-     * 죽는다.
+     * Checks whether [source] can actually be opened right now — returns false if the file has been
+     * deleted/moved or SAF permission has been revoked. Used to check ahead of time before showing a
+     * "resume reading" candidate: if we skip this check and try to read directly, `openInputStream`
+     * can throw `FileNotFoundException`/`SecurityException` with nothing to catch it, crashing the app.
      */
     suspend fun exists(context: Context, source: BookSource): Boolean = withContext(Dispatchers.IO) {
         try {
             when (source) {
-                // openInputStream 성공 여부로 판단한다 — 실제 읽기(readBytes)가 쓰는 것과 똑같은 경로라,
-                // "이 경로로 읽을 수 있는가"를 가장 정확하게 흉내낸다. DocumentFile.exists()는
-                // content:// SAF 문서 URI 전용이라 file:// URI(테스트에서 씀)에는 안 통한다.
+                // Judged by whether openInputStream succeeds — this is the exact same path the real
+                // read (readBytes) uses, so it's the most accurate stand-in for "can this actually be
+                // read". DocumentFile.exists() only works for content:// SAF document URIs, not
+                // file:// URIs (which tests use).
                 is BookSource.PlainTxt -> context.contentResolver.openInputStream(source.uri)?.use { } != null
                 is BookSource.ZipEntryTxt -> zipEntryExists(context, source)
             }

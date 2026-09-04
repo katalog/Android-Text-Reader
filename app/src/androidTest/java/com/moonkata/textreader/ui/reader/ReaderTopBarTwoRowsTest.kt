@@ -29,12 +29,12 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * 상단바 2행 재구성(PR1~3)의 최종 결과를 실제 렌더링으로 검증한다:
- * 1. 크롬이 보이는 상태에서 1행(뒤로·설정)과 2행(목차·검색·챕터점프) 컨트롤이 전부 존재한다.
- * 2. 하단바(프로그레스바 + 퍼센트 텍스트)는 완전히 삭제됐으므로, 크롬이 보이는 동안에는 "%" 문자가
- *    들어간 텍스트가 화면 어디에도 없어야 한다.
- * 3. 크롬을 숨기면(전부 안 보이는 상태) 화면 구석의 작은 퍼센트 표시는 여전히 나타나야 한다 —
- *    이건 하단바 소속이 아니라 별개 UI라 PR3에서 의도적으로 유지한 부분.
+ * Verifies the final result of the top-bar two-row restructuring (PR1-3) via real rendering:
+ * 1. With chrome visible, all row 1 (back, settings) and row 2 (TOC, search, chapter jump) controls exist.
+ * 2. The bottom bar (progress bar + percent text) has been fully removed, so while chrome is visible
+ *    no text containing a "%" character should appear anywhere on screen.
+ * 3. Hiding chrome (everything hidden) should still show the small percent indicator in the corner of
+ *    the screen — that's separate UI, not part of the bottom bar, and was deliberately kept in PR3.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderTopBarTwoRowsTest {
@@ -73,42 +73,44 @@ class ReaderTopBarTwoRowsTest {
                 }
             }
 
-            // 로딩이 끝나면 크롬이 자동으로 숨는다(ReaderChromeAutoHideTest 참고) — 위쪽 30%를 탭해서
-            // 다시 띄운다.
+            // Once loading finishes, chrome automatically hides (see ReaderChromeAutoHideTest) — tap
+            // the top 30% to bring it back up.
             composeTestRule.waitUntil(timeoutMillis = 10_000) {
                 composeTestRule.onAllNodesWithText(firstParagraphMarker, substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.5f, height * 0.1f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isNotEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isNotEmpty()
             }
 
-            // 1행: 뒤로가기 + 설정
-            composeTestRule.onNodeWithContentDescription("뒤로").assertExists()
-            composeTestRule.onNodeWithContentDescription("설정").assertExists()
+            // Row 1: back + settings
+            composeTestRule.onNodeWithContentDescription("Back").assertExists()
+            composeTestRule.onNodeWithContentDescription("Settings").assertExists()
 
-            // 2행: 목차 + 검색 + 챕터점프 토글
-            composeTestRule.onNodeWithContentDescription("목차").assertExists()
-            composeTestRule.onNodeWithContentDescription("검색").assertExists()
-            composeTestRule.onNodeWithText("챕터 점프", substring = true).assertExists()
+            // Row 2: TOC + search + chapter-jump toggle
+            composeTestRule.onNodeWithContentDescription("Table of contents").assertExists()
+            composeTestRule.onNodeWithContentDescription("Search").assertExists()
+            composeTestRule.onNodeWithText("Chapter jump", substring = true).assertExists()
 
-            // 하단바가 완전히 삭제됐으므로, 크롬이 보이는 지금은 "%" 들어간 텍스트가 어디에도 없어야 한다
-            // (구석 퍼센트 표시는 크롬이 숨겨졌을 때만 뜨므로 지금은 영향 없음).
+            // Since the bottom bar has been fully removed, no text containing "%" should exist
+            // anywhere while chrome is visible right now (the corner percent indicator only appears
+            // when chrome is hidden, so it has no effect here).
             assertTrue(
-                "하단바(프로그레스바 + 퍼센트)가 삭제됐으므로 크롬이 보이는 동안 퍼센트 텍스트가 없어야 함",
+                "The bottom bar (progress bar + percent) was removed, so there should be no percent text while chrome is visible",
                 composeTestRule.onAllNodesWithText("%", substring = true).fetchSemanticsNodes().isEmpty(),
             )
 
-            // 뷰어 영역을 탭해 크롬을 다시 숨긴다 — 구석 퍼센트 표시(별개 UI)는 이때만 나타나야 한다.
+            // Tap the viewer area to hide chrome again — the corner percent indicator (separate UI)
+            // should only appear now.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.75f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("뒤로").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
-                "크롬이 숨겨진 동안에는 구석의 작은 퍼센트 표시가 그대로 남아있어야 함(하단바 삭제와 무관한 별개 UI)",
+                "The small percent indicator in the corner should remain while chrome is hidden (separate UI unrelated to the removed bottom bar)",
                 composeTestRule.onAllNodesWithText("%", substring = true).fetchSemanticsNodes().isNotEmpty(),
             )
         } finally {

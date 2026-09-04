@@ -9,26 +9,27 @@ import java.net.URL
 import java.net.URLEncoder
 import javax.net.ssl.HttpsURLConnection
 
-/** PC 트레이 서버가 공유 중인 파일 하나 — 상대 경로는 `/` 구분(공유 루트 기준). */
+/** A single file being shared by the PC tray server — the relative path uses `/` as separator (rooted at the shared folder). */
 data class PcRemoteFile(
     val relativePath: String,
     val sizeBytes: Long,
     val lastModifiedMillis: Long,
 )
 
-/** 고정 포트 — .docs/PC_SYNC_SERVER_PLAN.md §2, PC 서버(별도 저장소 go-moonkata-reader-sync-server)와
- * 동일 값이어야 함. */
+/** Fixed port — .docs/PC_SYNC_SERVER_PLAN.md §2; must match the PC server's value (separate repo
+ * go-moonkata-reader-sync-server). */
 const val PC_SYNC_PORT = 58221
 
 /**
- * PC 트레이 서버(별도 저장소 go-moonkata-reader-sync-server, Go)에 접속 — .docs/PC_SYNC_SERVER_PLAN.md §5.
- * `ReadingPositionSyncClient`와 같은 스타일(`HttpURLConnection` 계열 직접 사용, 새 의존성 없음). 공유
- * 시크릿은 `x-moonkata-secret` 헤더로 보낸다.
+ * Connects to the PC tray server (separate repo go-moonkata-reader-sync-server, Go) —
+ * .docs/PC_SYNC_SERVER_PLAN.md §5. Same style as `ReadingPositionSyncClient` (uses `HttpURLConnection`
+ * directly, no new dependency). The shared secret is sent via the `x-moonkata-secret` header.
  *
- * PC 서버는 자체 서명 인증서로 HTTPS를 쓴다(사설 IP엔 공인 인증서를 못 받으므로) — 그래서
- * [pinnedFingerprint]가 null이면(연결 테스트 단계) 어떤 인증서든 받아들이는 대신 실제로 받은 인증서의
- * 지문을 [lastSeenFingerprint]에 기록해서 호출자가 저장할 수 있게 하고, 지문이 주어지면(평소 동기화
- * 단계) 그 값과 정확히 일치하는 인증서만 받아들인다(TOFU 방식, §5 참고).
+ * The PC server uses HTTPS with a self-signed certificate (a private IP can't get a publicly-trusted
+ * certificate) — so when [pinnedFingerprint] is null (during the connection-test stage), any certificate
+ * is accepted, but the fingerprint of the certificate actually received is recorded in
+ * [lastSeenFingerprint] so the caller can persist it; once a fingerprint is supplied (during normal sync),
+ * only a certificate matching it exactly is accepted (TOFU approach, see §5).
  */
 class PcSyncClient(
     private val host: String,
@@ -37,21 +38,24 @@ class PcSyncClient(
 ) {
     private val baseUrl: String get() = "https://$host:$PC_SYNC_PORT"
 
-    /** 가장 최근 요청에서 실제로 받은 인증서의 지문 — 연결 테스트 성공 시 이 값을 저장해두고 이후
-     * 요청부터는 [pinnedFingerprint]로 넘겨서 검증하게 한다. */
+    /** Fingerprint of the certificate actually received in the most recent request — once a connection
+     * test succeeds, this value is saved and passed in as [pinnedFingerprint] for subsequent requests to
+     * verify against. */
     var lastSeenFingerprint: String? = null
         private set
 
     /**
-     * [testConnection]이 실패했을 때 원인 — 예전엔 Log.w로만 남기고 화면엔 안 보여줘서 "네트워크가
-     * 안 닿는 건지/지문이 안 맞는 건지/시크릿이 틀린 건지" 구분할 방법이 없었다(VSCode 동기화 쪽에서
-     * 똑같은 문제를 겪고 고친 것과 같은 이유로 추가, .docs/SYNC_MULTIUSER_PLAN.md 참고).
+     * The cause when [testConnection] fails — this used to only go to Log.w and never surface on screen,
+     * so there was no way to tell whether "the network is unreachable / the fingerprint doesn't match /
+     * the secret is wrong." Added for the same reason the VSCode sync side hit and fixed the identical
+     * problem — see .docs/SYNC_MULTIUSER_PLAN.md.
      */
     var lastTestConnectionError: String? = null
         private set
 
-    /** 연결 테스트 — 시크릿이 맞는지 `/list` 호출로 확인(성공하면 시크릿도 맞다는 뜻), 이때 받은 인증서
-     * 지문을 [lastSeenFingerprint]에 남긴다. */
+    /** Connection test — confirms the secret is correct by calling `/list` (success implies the secret is
+     * also correct), and records the certificate fingerprint received during that call into
+     * [lastSeenFingerprint]. */
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
         lastTestConnectionError = null
         runCatching {
@@ -65,12 +69,12 @@ class PcSyncClient(
             connection.inputStream.use { it.readBytes() }
             recordFingerprint(connection)
         }.onFailure {
-            Log.w(TAG, "PC 서버 연결 테스트 실패", it)
+            Log.w(TAG, "PC server connection test failed", it)
             if (lastTestConnectionError == null) lastTestConnectionError = "${it.javaClass.simpleName}: ${it.message}"
         }.isSuccess
     }
 
-    /** 원격 파일 목록 — 실패하면 null. */
+    /** Remote file listing — null on failure. */
     suspend fun listFilesRecursively(): List<PcRemoteFile>? = withContext(Dispatchers.IO) {
         runCatching {
             val connection = openConnection("$baseUrl/list", requireSecret = true)
@@ -87,17 +91,17 @@ class PcSyncClient(
             }
             recordFingerprint(connection)
             files
-        }.onFailure { Log.w(TAG, "PC 서버 파일 목록 조회 실패", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "Failed to fetch PC server file listing", it) }.getOrNull()
     }
 
-    /** [relativePath] 파일 내용을 [outputStream]으로 그대로 흘려 받는다. */
+    /** Streams the contents of the file at [relativePath] directly into [outputStream]. */
     suspend fun downloadFile(relativePath: String, outputStream: OutputStream): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val encoded = URLEncoder.encode(relativePath, "UTF-8").replace("+", "%20")
             val connection = openConnection("$baseUrl/file?path=$encoded", requireSecret = true)
             connection.inputStream.use { input -> input.copyTo(outputStream) }
             recordFingerprint(connection)
-        }.onFailure { Log.w(TAG, "PC 서버 파일 다운로드 실패: $relativePath", it) }.isSuccess
+        }.onFailure { Log.w(TAG, "Failed to download file from PC server: $relativePath", it) }.isSuccess
     }
 
     private fun openConnection(url: String, requireSecret: Boolean): HttpsURLConnection =
@@ -110,8 +114,8 @@ class PcSyncClient(
             if (requireSecret) setRequestProperty("x-moonkata-secret", secret)
         }
 
-    /** [connection]은 이미 `inputStream`을 한 번 읽어서 TLS 핸드셰이크가 끝난 상태여야 한다 — 그 전엔
-     * `getServerCertificates()`가 예외를 던진다. */
+    /** [connection] must have already had its `inputStream` read once so the TLS handshake has completed
+     * — before that, `getServerCertificates()` throws. */
     private fun recordFingerprint(connection: HttpsURLConnection) {
         runCatching { connection.serverCertificates.firstOrNull() }.getOrNull()?.let {
             lastSeenFingerprint = sha256Fingerprint(it)
@@ -121,8 +125,9 @@ class PcSyncClient(
     companion object {
         private const val TAG = "PcSyncClient"
 
-        /** "PC 찾기" 스캔용 — 포트가 열려 있어도 우리 서버가 맞는지 `/ping` 응답으로 확인한다. 아직
-         * 아무것도 안 믿는 단계라 인증서는 검증하지 않는다(민감한 정보를 주고받지 않는 탐색 단계). */
+        /** For the "find PC" scan — even if the port is open, confirms it's actually our server via the
+         * `/ping` response. Certificates aren't validated at this stage since nothing is trusted yet
+         * (a discovery step that doesn't exchange sensitive information). */
         suspend fun isPcSyncServer(host: String): Boolean = withContext(Dispatchers.IO) {
             runCatching {
                 val connection = (URL("https://$host:$PC_SYNC_PORT/ping").openConnection() as HttpsURLConnection).apply {
