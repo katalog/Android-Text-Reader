@@ -296,7 +296,12 @@ class LibraryViewModel(
             // 그 지문과 다른 인증서를 내미는 서버는 거부된다.
             val client = PcSyncClient(settings.pcSyncHost, settings.pcSyncSecret, settings.pcSyncPinnedFingerprint)
             val manager = PcSyncFileManager(getApplication(), client)
-            val result = manager.sync(rootUri) { progress ->
+            // 지난번 동기화가 언제 끝났는지(이 기기 시계 기준) 넘겨서, 크기는 같지만 그 이후 PC에서
+            // 내용이 바뀐 파일도 다시 받게 한다(computeSyncDelta 참고). 0이면 한 번도 성공한 적 없다는
+            // 뜻이라 null로 넘겨 이 보정을 건너뛴다.
+            val sinceMillis = settings.pcSyncLastCompletedAtMillis.takeIf { it > 0 }
+            val syncStartedAt = System.currentTimeMillis()
+            val result = manager.sync(rootUri, sinceMillis = sinceMillis) { progress ->
                 _pcSyncState.update { it.copy(progress = progress) }
             }
             _pcSyncState.update {
@@ -309,7 +314,13 @@ class LibraryViewModel(
             // 동기화가 지금 보고 있는 폴더 안의 파일을 바꿨을 수 있는데, 폴더뷰 목록은 처음 들어왔을 때
             // 한 번만 읽어온 상태라 그대로 두면 새로 받은 파일이 화면엔 안 보인다(실기기 검증 중 확인) —
             // 성공하면 지금 위치를 다시 읽어온다.
-            if (result != null) loadCurrent()
+            if (result != null) {
+                loadCurrent()
+                // 동기화 "끝난" 시각이 아니라 "시작한" 시각을 기준선으로 남긴다 — 동기화가 도는 동안(수
+                // 초~수십 초) PC에서 또 파일을 바꾸면 그 변경은 원격 mtime이 시작 시각보다 늦을 수 있어
+                // "끝난 시각"을 쓰면 다음 번에 놓친다.
+                settingsRepository.updatePcSyncLastCompletedAt(syncStartedAt)
+            }
         }
     }
 

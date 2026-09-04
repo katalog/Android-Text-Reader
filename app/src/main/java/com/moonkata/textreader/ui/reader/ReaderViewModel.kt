@@ -482,7 +482,7 @@ class ReaderViewModel(
     fun next() {
         val state = _uiState.value
         if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
-            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions)
+            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
             val anchor = maxOf(state.currentOffset, lastChapterJumpOffset ?: Int.MIN_VALUE)
             val target = ChapterJumpNavigator.nextBreakpoint(breakpoints, anchor)
             if (target == null) {
@@ -505,7 +505,7 @@ class ReaderViewModel(
     fun previous() {
         val state = _uiState.value
         if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
-            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions)
+            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
             val anchor = minOf(state.currentOffset, lastChapterJumpOffset ?: Int.MAX_VALUE)
             val target = ChapterJumpNavigator.previousBreakpoint(breakpoints, anchor)
             if (target == null) {

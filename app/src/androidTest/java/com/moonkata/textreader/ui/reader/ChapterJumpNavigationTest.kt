@@ -53,7 +53,7 @@ class ChapterJumpNavigationTest {
             }
 
             val state = viewModel.uiState.value
-            val expectedBreakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, divisions)
+            val expectedBreakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, divisions, state.fullText)
             assertTrue("픽스처에 챕터 점프 지점이 충분히 있어야 함", expectedBreakpoints.size >= 20)
 
             val stepsToTest = 15

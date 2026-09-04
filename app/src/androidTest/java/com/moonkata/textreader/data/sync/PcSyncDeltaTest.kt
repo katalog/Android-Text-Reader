@@ -101,4 +101,40 @@ class PcSyncDeltaTest {
         assertTrue(delta.toWrite.isEmpty())
         assertTrue(delta.toDelete.isEmpty())
     }
+
+    // --- sinceMillis: 크기는 같지만 마지막 동기화 이후 원격에서 내용이 바뀐 파일 감지 ---
+
+    @Test
+    fun sameSize_butRemoteModifiedAfterSinceMillis_isReDownloaded() {
+        // 오탈자 한 글자를 다른 글자로 바꾸는 등 글자 수는 그대로인 내용 수정 — 크기 비교만으로는
+        // 영원히 못 잡으므로 sinceMillis(마지막 동기화 완료 시각)로 보완한다.
+        val delta = computeSyncDelta(
+            remoteFiles = listOf(remote("book.txt", size = 100, modified = 5_000L)),
+            localFiles = listOf(local("book.txt", size = 100)),
+            sinceMillis = 4_000L,
+        )
+        assertEquals(listOf("book.txt"), delta.toWrite.map { it.relativePath })
+    }
+
+    @Test
+    fun sameSize_remoteModifiedBeforeSinceMillis_isLeftUntouched() {
+        val delta = computeSyncDelta(
+            remoteFiles = listOf(remote("book.txt", size = 100, modified = 3_000L)),
+            localFiles = listOf(local("book.txt", size = 100)),
+            sinceMillis = 4_000L,
+        )
+        assertTrue(delta.toWrite.isEmpty())
+    }
+
+    @Test
+    fun sameSize_sinceMillisNull_isLeftUntouched_evenIfRemoteModifiedTimeIsRecent() {
+        // sinceMillis를 안 넘기면(한 번도 동기화한 적 없는 등) 이 보정 자체를 건너뛰어야 한다 —
+        // 크기만 보는 기존 회귀 방지 테스트들과 동일한 동작이 기본값이어야 함.
+        val delta = computeSyncDelta(
+            remoteFiles = listOf(remote("book.txt", size = 100, modified = 9_999_999L)),
+            localFiles = listOf(local("book.txt", size = 100)),
+            sinceMillis = null,
+        )
+        assertTrue(delta.toWrite.isEmpty())
+    }
 }

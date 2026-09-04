@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -55,6 +56,7 @@ class ReaderSettingsRepository(private val context: Context) {
         val PC_SYNC_VERIFIED_HOST = stringPreferencesKey("pc_sync_verified_host")
         val PC_SYNC_VERIFIED_SECRET = stringPreferencesKey("pc_sync_verified_secret")
         val PC_SYNC_PINNED_FINGERPRINT = stringPreferencesKey("pc_sync_pinned_fingerprint")
+        val PC_SYNC_LAST_COMPLETED_AT_MILLIS = longPreferencesKey("pc_sync_last_completed_at_millis")
     }
 
     val settingsFlow: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
@@ -98,6 +100,7 @@ class ReaderSettingsRepository(private val context: Context) {
             pcSyncVerifiedHost = prefs[Keys.PC_SYNC_VERIFIED_HOST] ?: defaults.pcSyncVerifiedHost,
             pcSyncVerifiedSecret = prefs[Keys.PC_SYNC_VERIFIED_SECRET] ?: defaults.pcSyncVerifiedSecret,
             pcSyncPinnedFingerprint = prefs[Keys.PC_SYNC_PINNED_FINGERPRINT] ?: defaults.pcSyncPinnedFingerprint,
+            pcSyncLastCompletedAtMillis = prefs[Keys.PC_SYNC_LAST_COMPLETED_AT_MILLIS] ?: defaults.pcSyncLastCompletedAtMillis,
         )
     }
 
@@ -152,6 +155,8 @@ class ReaderSettingsRepository(private val context: Context) {
             if (fingerprint != null) it[Keys.PC_SYNC_PINNED_FINGERPRINT] = fingerprint
         }
     }
+
+    suspend fun updatePcSyncLastCompletedAt(value: Long) = edit { it[Keys.PC_SYNC_LAST_COMPLETED_AT_MILLIS] = value }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)

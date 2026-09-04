@@ -68,4 +68,9 @@ data class ReaderSettings(
      * "이 PC"로 신뢰하기로 저장해두는 값(TOFU, §5 참고). 사용자가 직접 입력하는 값이 아니라 앱이
      * 연결 테스트 때 자동으로 채운다. */
     val pcSyncPinnedFingerprint: String = "",
+    /** 마지막으로 성공한 PC 동기화가 끝난 시각(기기 시각 기준, epoch millis) — 0이면 아직 한 번도
+     * 성공한 적 없음. 원격 파일의 [수정시각][com.moonkata.textreader.data.sync.PcRemoteFile.lastModifiedMillis]이
+     * 이 값보다 늦으면, 크기가 로컬과 같아도 "그 이후 PC에서 내용이 바뀐 파일"로 보고 다시 받는다
+     * (PcSyncFileManager.kt 참고 — 크기만 보는 기존 비교로는 우연히 같은 글자 수로 바뀐 내용을 놓친다). */
+    val pcSyncLastCompletedAtMillis: Long = 0L,
 )
