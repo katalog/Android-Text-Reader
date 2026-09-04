@@ -3,6 +3,7 @@ package com.moonkata.textreader.ui.library
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import com.moonkata.textreader.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -141,6 +142,29 @@ class LibraryViewModel(
             if (mostRecent?.lastOpenedAt != null && bookRepository.bookFileExists(mostRecent)) {
                 _resumeCandidate.value = mostRecent
             }
+        }
+        if (BuildConfig.DEBUG) {
+            viewModelScope.launch { seedDebugSyncDefaultsIfBlank() }
+        }
+    }
+
+    /**
+     * 실기기 동기화 테스트 편의용(디버그 빌드 전용) — PC 동기화 호스트/시크릿, VSCode 공유 시크릿을
+     * 매번 QR 스캔이나 수동 입력 없이 미리 채워둔다. 값 자체는 local.properties의 DEBUG_PC_SYNC_HOST
+     * 등을 통해 개발자 PC에서만 주입되고(app/build.gradle.kts 참고), 릴리스 빌드에서는 항상 빈
+     * 문자열이라 이 함수가 아무 것도 하지 않는다. "검증됨" 상태까지는 안 채운다 — TOFU 지문 고정은
+     * 실제로 한 번 연결 테스트를 거쳐야 의미가 있으므로, 필드만 채워서 "연결 테스트" 한 번으로 끝나게만
+     * 한다. 이미 값이 있으면(사용자가 직접 설정했거나 이전에 이미 시드됨) 덮어쓰지 않는다.
+     */
+    private suspend fun seedDebugSyncDefaultsIfBlank() {
+        val settings = settingsRepository.settingsFlow.first()
+        if (settings.pcSyncHost.isBlank() && settings.pcSyncSecret.isBlank() &&
+            BuildConfig.DEBUG_PC_SYNC_HOST.isNotBlank() && BuildConfig.DEBUG_PC_SYNC_SECRET.isNotBlank()
+        ) {
+            settingsRepository.updatePcSyncConnection(BuildConfig.DEBUG_PC_SYNC_HOST, BuildConfig.DEBUG_PC_SYNC_SECRET)
+        }
+        if (settings.supabaseSharedSecret.isBlank() && BuildConfig.DEBUG_SUPABASE_SHARED_SECRET.isNotBlank()) {
+            settingsRepository.updateSupabaseSharedSecret(BuildConfig.DEBUG_SUPABASE_SHARED_SECRET)
         }
     }
 

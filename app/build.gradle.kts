@@ -32,6 +32,16 @@ val supabaseUrl = (System.getenv("SUPABASE_URL") ?: localProperties.getProperty(
 val supabasePublishableKey = (System.getenv("SUPABASE_PUBLISHABLE_KEY")
     ?: localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY") ?: "").trim()
 
+// 실기기 동기화 테스트 편의용 — 디버그 빌드에서만 PC 동기화/VSCode 공유 시크릿을 미리 채워둔다(QR
+// 스캔이나 수동 타이핑 없이 "연결 테스트" 한 번이면 바로 연결됨). 진짜 자격증명이 아니라 그냥 짝을
+// 맞추는 임의 문자열이라 커밋해도 위험하지 않지만, 개발자 개인 PC/네트워크에 종속된 값이라 여기서도
+// SUPABASE_URL과 같은 패턴으로 local.properties(gitignore 대상)를 통해서만 주입한다 — 디버그 buildType
+// 전용이라 release APK에는 아예 안 들어간다(LibraryViewModel.seedDebugSyncDefaultsIfBlank 참고).
+val debugPcSyncHost = (System.getenv("DEBUG_PC_SYNC_HOST") ?: localProperties.getProperty("DEBUG_PC_SYNC_HOST") ?: "").trim()
+val debugPcSyncSecret = (System.getenv("DEBUG_PC_SYNC_SECRET") ?: localProperties.getProperty("DEBUG_PC_SYNC_SECRET") ?: "").trim()
+val debugSupabaseSharedSecret = (System.getenv("DEBUG_SUPABASE_SHARED_SECRET")
+    ?: localProperties.getProperty("DEBUG_SUPABASE_SHARED_SECRET") ?: "").trim()
+
 // release.yml이 태그(v1.1 → "1.1")와 CI 실행 번호로 이 두 값을 넘긴다 — 없으면(로컬 빌드) 예전
 // 고정값으로 폴백한다. 이게 없으면 어떤 태그로 릴리스를 뽑든 설치된 APK의 실제 버전 표시는 항상
 // 이 폴백값에 머물러서, Obtainium 같은 도구가 보여주는 "최신 태그"와 실제 설치 버전이 어긋난다.
@@ -55,6 +65,11 @@ android {
         }
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabasePublishableKey\"")
+        // 릴리스에서도 컴파일되게(공용 코드가 참조하므로) 빈 문자열로 기본 선언 — 실제 값은 debug
+        // buildType에서만 덮어쓴다.
+        buildConfigField("String", "DEBUG_PC_SYNC_HOST", "\"\"")
+        buildConfigField("String", "DEBUG_PC_SYNC_SECRET", "\"\"")
+        buildConfigField("String", "DEBUG_SUPABASE_SHARED_SECRET", "\"\"")
     }
 
     signingConfigs {
@@ -69,6 +84,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "DEBUG_PC_SYNC_HOST", "\"$debugPcSyncHost\"")
+            buildConfigField("String", "DEBUG_PC_SYNC_SECRET", "\"$debugPcSyncSecret\"")
+            buildConfigField("String", "DEBUG_SUPABASE_SHARED_SECRET", "\"$debugSupabaseSharedSecret\"")
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName(if (releaseKeystorePath != null) "release" else "debug")
