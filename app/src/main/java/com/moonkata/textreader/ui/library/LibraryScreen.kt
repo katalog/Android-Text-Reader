@@ -147,7 +147,10 @@ fun LibraryScreen(
             }
             if (uiState.rootUri == null) {
                 Text(
-                    stringResource(R.string.library_no_folder_added),
+                    stringResource(
+                        if (uiState.folderAccessLost) R.string.library_folder_access_lost
+                        else R.string.library_no_folder_added
+                    ),
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
             } else if (uiState.entries.isEmpty() && !uiState.isLoading) {

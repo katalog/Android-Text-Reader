@@ -37,6 +37,7 @@ import com.moonkata.textreader.data.sync.normalizeRelativePath
 import com.moonkata.textreader.model.FolderEntry
 import com.moonkata.textreader.model.FolderSortOption
 import com.moonkata.textreader.ui.SettingsController
+import com.moonkata.textreader.util.hasPersistedReadPermission
 import com.moonkata.textreader.util.takePersistableReadPermission
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,6 +63,7 @@ private data class BrowseState(
     val entries: List<FolderEntry> = emptyList(),
     val isLoading: Boolean = false,
     val sortOption: FolderSortOption = FolderSortOption.NAME_ASC,
+    val folderAccessLost: Boolean = false,
 )
 
 /** The PC server "sync now" progress state — `LibraryViewModel.pcSyncState`. */
@@ -80,6 +82,12 @@ data class LibraryUiState(
     val sortOption: FolderSortOption = FolderSortOption.NAME_ASC,
     val progressByStoredUri: Map<String, Float> = emptyMap(),
     val settings: ReaderSettings = ReaderSettings(),
+    // True when a home folder was picked before, but its SAF permission grant no longer exists —
+    // e.g. Android's Auto Backup restored the saved URI string on a fresh install without the grant
+    // surviving (SAF permissions are re-issued per install), or the folder itself was deleted/moved.
+    // Distinguished from "never picked one" (rootUri == null, this false) so the empty state can tell
+    // the user to re-pick rather than implying no folder was ever added.
+    val folderAccessLost: Boolean = false,
 )
 
 /**
@@ -128,6 +136,7 @@ class LibraryViewModel(
                 sortOption = browse.sortOption,
                 progressByStoredUri = books.associate { it.documentUri to it.lastReadProgressPercent },
                 settings = settings,
+                folderAccessLost = browse.folderAccessLost,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryUiState())
 
@@ -135,7 +144,14 @@ class LibraryViewModel(
         viewModelScope.launch {
             val settings = settingsRepository.settingsFlow.first()
             _browseState.update { it.copy(sortOption = settings.librarySortOption) }
-            if (settings.lastUsedSafTreeUri != null) openRoot(Uri.parse(settings.lastUsedSafTreeUri))
+            val savedUri = settings.lastUsedSafTreeUri?.let { Uri.parse(it) }
+            if (savedUri != null) {
+                if (getApplication<Application>().hasPersistedReadPermission(savedUri)) {
+                    openRoot(savedUri)
+                } else {
+                    _browseState.update { it.copy(folderAccessLost = true) }
+                }
+            }
         }
         viewModelScope.launch {
             val mostRecent = bookRepository.observeLibrary().first().firstOrNull()
@@ -181,7 +197,7 @@ class LibraryViewModel(
 
     private fun openRoot(uri: Uri) {
         val name = folderBrowser.rootDisplayName(uri)
-        _browseState.update { it.copy(rootUri = uri, path = listOf(BrowseLocation.Folder(uri, name))) }
+        _browseState.update { it.copy(rootUri = uri, path = listOf(BrowseLocation.Folder(uri, name)), folderAccessLost = false) }
         loadCurrent()
     }
 

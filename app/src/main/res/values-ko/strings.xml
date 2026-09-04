@@ -9,7 +9,8 @@
     <string name="library_settings_desc">설정</string>
     <string name="library_add_folder">폴더 추가</string>
     <string name="library_change_folder">폴더 변경</string>
-    <string name="library_no_folder_added">폴더를 추가해서 txt 소설을 불러오세요</string>
+    <string name="library_no_folder_added">홈 폴더를 추가해서 txt 소설을 불러오세요</string>
+    <string name="library_folder_access_lost">이전에 선택한 홈 폴더에 더 이상 접근할 수 없습니다. 다시 선택해주세요.</string>
     <string name="library_no_txt_zip_files">이 폴더에는 txt/zip 파일이 없습니다</string>
     <string name="library_percent_read">%1$.3f%% 읽음</string>
     <string name="library_unread">안읽음</string>
@@ -47,6 +48,7 @@
     <string name="chapter_pattern_preset_hash_example">## 제1장 평범하기 그지없는 노르만인 수도사</string>
 
     <!-- Quick settings sheet -->
+    <string name="settings_screen_title">설정</string>
     <string name="settings_section_font">글자</string>
     <string name="settings_font_size">크기</string>
     <string name="settings_line_height">줄간격</string>
@@ -152,6 +154,6 @@
     <string name="pc_sync_close">닫기</string>
 
     <!-- Misc data-layer fallback strings -->
-    <string name="folder_root_fallback_name">루트</string>
+    <string name="folder_root_fallback_name">홈</string>
     <string name="font_download_failed_fallback">다운로드 실패</string>
 </resources>

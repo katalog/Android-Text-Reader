@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
@@ -23,12 +25,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +46,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
@@ -62,7 +66,6 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showFontPicker by remember { mutableStateOf(false) }
     var showChapterPatterns by remember { mutableStateOf(false) }
 
@@ -93,8 +96,25 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
         onDismiss()
     }
 
-    ModalBottomSheet(onDismissRequest = dismissAndCommitSync, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    // A full-screen Dialog instead of a ModalBottomSheet — this sheet's content is long enough that
+    // scrolling through it on a bottom sheet made an up/down swipe easy to mistake for the sheet's
+    // own swipe-to-dismiss gesture, closing it mid-scroll. A Dialog only closes via the back button/
+    // gesture or system back, never from a vertical drag.
+    Dialog(onDismissRequest = dismissAndCommitSync, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.settings_screen_title)) },
+                    navigationIcon = {
+                        IconButton(onClick = dismissAndCommitSync) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.reader_back_desc))
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+        Column(Modifier.fillMaxWidth().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(stringResource(R.string.settings_section_font), style = MaterialTheme.typography.titleMedium)
             LabeledStepper(stringResource(R.string.settings_font_size), settings.fontSizeSp, 1f, 12f..32f, format = { "${it.toInt()}sp" }) { viewModel.setFontSizeSp(it) }
             LabeledStepper(stringResource(R.string.settings_line_height), settings.lineHeightMultiplier, 0.1f, 1.0f..2.5f, format = { "%.1f".format(it) }) { viewModel.setLineHeightMultiplier(it) }
@@ -300,6 +320,7 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
 
             Spacer(Modifier.height(24.dp))
         }
+        }
     }
 
     if (showFontPicker) {
@@ -360,7 +381,8 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     Row(
         Modifier
             .fillMaxWidth()
-            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch),
+            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, modifier = Modifier.weight(1f))

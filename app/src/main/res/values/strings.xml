@@ -9,7 +9,8 @@
     <string name="library_settings_desc">Settings</string>
     <string name="library_add_folder">Add folder</string>
     <string name="library_change_folder">Change folder</string>
-    <string name="library_no_folder_added">Add a folder to load your .txt novels</string>
+    <string name="library_no_folder_added">Add a home folder to load your .txt novels</string>
+    <string name="library_folder_access_lost">Can no longer access your home folder. Please choose it again.</string>
     <string name="library_no_txt_zip_files">This folder has no txt/zip files</string>
     <string name="library_percent_read">%1$.3f%% read</string>
     <string name="library_unread">Unread</string>
@@ -47,6 +48,7 @@
     <string name="chapter_pattern_preset_hash_example">## Chapter 1: An Utterly Ordinary Beginning</string>
 
     <!-- Quick settings sheet -->
+    <string name="settings_screen_title">Settings</string>
     <string name="settings_section_font">Font</string>
     <string name="settings_font_size">Size</string>
     <string name="settings_line_height">Line height</string>
@@ -152,6 +154,6 @@
     <string name="pc_sync_close">Close</string>
 
     <!-- Misc data-layer fallback strings -->
-    <string name="folder_root_fallback_name">Root</string>
+    <string name="folder_root_fallback_name">Home</string>
     <string name="font_download_failed_fallback">Download failed</string>
 </resources>
