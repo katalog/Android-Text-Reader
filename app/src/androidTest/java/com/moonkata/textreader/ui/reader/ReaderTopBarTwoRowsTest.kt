@@ -30,7 +30,7 @@ import java.io.File
 
 /**
  * Verifies the final result of the top-bar two-row restructuring (PR1-3) via real rendering:
- * 1. With chrome visible, all row 1 (back, settings) and row 2 (TOC, search, chapter jump) controls exist.
+ * 1. With chrome visible, all row 1 (back, settings) and row 2 (TOC, search) controls exist.
  * 2. The bottom bar (progress bar + percent text) has been fully removed, so while chrome is visible
  *    no text containing a "%" character should appear anywhere on screen.
  * 3. Hiding chrome (everything hidden) should still show the small percent indicator in the corner of
@@ -59,7 +59,6 @@ class ReaderTopBarTwoRowsTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
         }
 
         val bookId = runBlocking {
@@ -90,10 +89,9 @@ class ReaderTopBarTwoRowsTest {
             composeTestRule.onNodeWithContentDescription("Back").assertExists()
             composeTestRule.onNodeWithContentDescription("Settings").assertExists()
 
-            // Row 2: TOC + search + chapter-jump toggle
+            // Row 2: TOC + search
             composeTestRule.onNodeWithContentDescription("Table of contents").assertExists()
             composeTestRule.onNodeWithContentDescription("Search").assertExists()
-            composeTestRule.onNodeWithText("Chapter jump", substring = true).assertExists()
 
             // Since the bottom bar has been fully removed, no text containing "%" should exist
             // anywhere while chrome is visible right now (the corner percent indicator only appears
@@ -118,7 +116,6 @@ class ReaderTopBarTwoRowsTest {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }

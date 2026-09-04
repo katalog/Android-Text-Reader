@@ -31,9 +31,7 @@ fun ReaderScrollContent(viewModel: ReaderViewModel, uiState: ReaderUiState, read
     val fontFamily = remember(settings.fontFamilyId) { FontResolver.resolve(context, settings.fontFamilyId) }
     val listState = rememberLazyListState()
 
-    val chapterOffsets = remember(uiState.chapters, settings.chapterJumpEnabled) {
-        if (settings.chapterJumpEnabled) uiState.chapters.map { it.charOffset }.toSet() else emptySet()
-    }
+    val chapterOffsets = remember(uiState.chapters) { uiState.chapters.map { it.charOffset }.toSet() }
     val paragraphStartOffsets = remember(uiState.paragraphs) { uiState.paragraphs.map { it.startOffset } }
     val currentParagraphStartOffsets by rememberUpdatedState(paragraphStartOffsets)
 

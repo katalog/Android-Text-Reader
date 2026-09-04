@@ -11,13 +11,12 @@ import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTransitionAnimation
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
 import com.moonkata.textreader.data.file.BookSource
@@ -394,12 +393,15 @@ class LibraryViewModel(
     override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
     override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
     override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
-    override fun setChapterJumpEnabled(value: Boolean) = launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
     override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
     override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
     override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
-    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
-    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setTouchLeftAction(value: PageGestureAction) = launchSetting { settingsRepository.updateTouchLeftAction(value) }
+    override fun setTouchRightAction(value: PageGestureAction) = launchSetting { settingsRepository.updateTouchRightAction(value) }
+    override fun setSwipeLeftAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeLeftAction(value) }
+    override fun setSwipeRightAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeRightAction(value) }
+    override fun setSwipeUpAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeUpAction(value) }
+    override fun setSwipeDownAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeDownAction(value) }
     override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
     override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
     override fun setAutoAdvanceMode(mode: AutoAdvanceMode) = launchSetting { settingsRepository.updateAutoAdvanceMode(mode) }

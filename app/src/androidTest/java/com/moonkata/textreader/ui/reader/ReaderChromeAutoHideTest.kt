@@ -57,7 +57,6 @@ class ReaderChromeAutoHideTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
         }
 
         val bookId = runBlocking {
@@ -101,7 +100,6 @@ class ReaderChromeAutoHideTest {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }

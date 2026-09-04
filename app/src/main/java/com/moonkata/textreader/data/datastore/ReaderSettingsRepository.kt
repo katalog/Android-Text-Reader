@@ -36,7 +36,6 @@ class ReaderSettingsRepository(private val context: Context) {
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val VOLUME_KEY_PAGING = booleanPreferencesKey("volume_key_paging")
         // The stored key name keeps the old "skip" naming as-is — changing it would wipe out existing saved chapter jump settings.
-        val CHAPTER_JUMP_ENABLED = booleanPreferencesKey("chapter_skip_enabled")
         val CHAPTER_JUMP_DIVISIONS = intPreferencesKey("chapter_skip_divisions")
         val AUTO_ADVANCE_MODE = stringPreferencesKey("auto_advance_mode")
         val AUTO_PAGE_TURN_INTERVAL_SECONDS = intPreferencesKey("auto_page_turn_interval_seconds")
@@ -46,8 +45,12 @@ class ReaderSettingsRepository(private val context: Context) {
         val LIBRARY_SORT_OPTION = stringPreferencesKey("library_sort_option")
         val CHAPTER_PATTERN_ENABLED_IDS = stringSetPreferencesKey("chapter_pattern_enabled_ids")
         val CHAPTER_CUSTOM_PATTERNS = stringSetPreferencesKey("chapter_custom_patterns")
-        val TOUCH_TURN_MODE = stringPreferencesKey("touch_turn_mode")
-        val SWIPE_TURN_MODE = stringPreferencesKey("swipe_turn_mode")
+        val TOUCH_LEFT_ACTION = stringPreferencesKey("touch_left_action")
+        val TOUCH_RIGHT_ACTION = stringPreferencesKey("touch_right_action")
+        val SWIPE_LEFT_ACTION = stringPreferencesKey("swipe_left_action")
+        val SWIPE_RIGHT_ACTION = stringPreferencesKey("swipe_right_action")
+        val SWIPE_UP_ACTION = stringPreferencesKey("swipe_up_action")
+        val SWIPE_DOWN_ACTION = stringPreferencesKey("swipe_down_action")
         val PAGE_TRANSITION_ANIMATION = stringPreferencesKey("page_transition_animation")
         val SUPABASE_SHARED_SECRET = stringPreferencesKey("supabase_shared_secret")
         val SUPABASE_VERIFIED_SECRET = stringPreferencesKey("supabase_verified_secret")
@@ -79,7 +82,6 @@ class ReaderSettingsRepository(private val context: Context) {
             lineBreakMode = prefs[Keys.LINE_BREAK_MODE]?.let { runCatching { LineBreakMode.valueOf(it) }.getOrNull() } ?: defaults.lineBreakMode,
             keepScreenOnEnabled = prefs[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOnEnabled,
             volumeKeyPagingEnabled = prefs[Keys.VOLUME_KEY_PAGING] ?: defaults.volumeKeyPagingEnabled,
-            chapterJumpEnabled = prefs[Keys.CHAPTER_JUMP_ENABLED] ?: defaults.chapterJumpEnabled,
             chapterJumpDivisions = prefs[Keys.CHAPTER_JUMP_DIVISIONS] ?: defaults.chapterJumpDivisions,
             autoAdvanceMode = prefs[Keys.AUTO_ADVANCE_MODE]?.let { runCatching { AutoAdvanceMode.valueOf(it) }.getOrNull() } ?: defaults.autoAdvanceMode,
             autoPageTurnIntervalSeconds = prefs[Keys.AUTO_PAGE_TURN_INTERVAL_SECONDS] ?: defaults.autoPageTurnIntervalSeconds,
@@ -89,8 +91,12 @@ class ReaderSettingsRepository(private val context: Context) {
             librarySortOption = prefs[Keys.LIBRARY_SORT_OPTION]?.let { runCatching { FolderSortOption.valueOf(it) }.getOrNull() } ?: defaults.librarySortOption,
             chapterPatternEnabledIds = prefs[Keys.CHAPTER_PATTERN_ENABLED_IDS] ?: defaults.chapterPatternEnabledIds,
             chapterCustomPatterns = prefs[Keys.CHAPTER_CUSTOM_PATTERNS] ?: defaults.chapterCustomPatterns,
-            touchTurnMode = prefs[Keys.TOUCH_TURN_MODE]?.let { runCatching { TouchTurnMode.valueOf(it) }.getOrNull() } ?: defaults.touchTurnMode,
-            swipeTurnMode = prefs[Keys.SWIPE_TURN_MODE]?.let { runCatching { SwipeTurnMode.valueOf(it) }.getOrNull() } ?: defaults.swipeTurnMode,
+            touchLeftAction = prefs[Keys.TOUCH_LEFT_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.touchLeftAction,
+            touchRightAction = prefs[Keys.TOUCH_RIGHT_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.touchRightAction,
+            swipeLeftAction = prefs[Keys.SWIPE_LEFT_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.swipeLeftAction,
+            swipeRightAction = prefs[Keys.SWIPE_RIGHT_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.swipeRightAction,
+            swipeUpAction = prefs[Keys.SWIPE_UP_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.swipeUpAction,
+            swipeDownAction = prefs[Keys.SWIPE_DOWN_ACTION]?.let { runCatching { PageGestureAction.valueOf(it) }.getOrNull() } ?: defaults.swipeDownAction,
             pageTransitionAnimation = prefs[Keys.PAGE_TRANSITION_ANIMATION]
                 ?.let { runCatching { PageTransitionAnimation.valueOf(it) }.getOrNull() } ?: defaults.pageTransitionAnimation,
             supabaseSharedSecret = prefs[Keys.SUPABASE_SHARED_SECRET] ?: defaults.supabaseSharedSecret,
@@ -123,7 +129,6 @@ class ReaderSettingsRepository(private val context: Context) {
     suspend fun updateLineBreakMode(value: LineBreakMode) = edit { it[Keys.LINE_BREAK_MODE] = value.name }
     suspend fun updateKeepScreenOnEnabled(value: Boolean) = edit { it[Keys.KEEP_SCREEN_ON] = value }
     suspend fun updateVolumeKeyPagingEnabled(value: Boolean) = edit { it[Keys.VOLUME_KEY_PAGING] = value }
-    suspend fun updateChapterJumpEnabled(value: Boolean) = edit { it[Keys.CHAPTER_JUMP_ENABLED] = value }
     suspend fun updateChapterJumpDivisions(value: Int) = edit { it[Keys.CHAPTER_JUMP_DIVISIONS] = value }
     suspend fun updateAutoAdvanceMode(value: AutoAdvanceMode) = edit { it[Keys.AUTO_ADVANCE_MODE] = value.name }
     suspend fun updateAutoPageTurnIntervalSeconds(value: Int) = edit { it[Keys.AUTO_PAGE_TURN_INTERVAL_SECONDS] = value }
@@ -135,8 +140,12 @@ class ReaderSettingsRepository(private val context: Context) {
     suspend fun updateLibrarySortOption(value: FolderSortOption) = edit { it[Keys.LIBRARY_SORT_OPTION] = value.name }
     suspend fun updateChapterPatternEnabledIds(value: Set<String>) = edit { it[Keys.CHAPTER_PATTERN_ENABLED_IDS] = value }
     suspend fun updateChapterCustomPatterns(value: Set<String>) = edit { it[Keys.CHAPTER_CUSTOM_PATTERNS] = value }
-    suspend fun updateTouchTurnMode(value: TouchTurnMode) = edit { it[Keys.TOUCH_TURN_MODE] = value.name }
-    suspend fun updateSwipeTurnMode(value: SwipeTurnMode) = edit { it[Keys.SWIPE_TURN_MODE] = value.name }
+    suspend fun updateTouchLeftAction(value: PageGestureAction) = edit { it[Keys.TOUCH_LEFT_ACTION] = value.name }
+    suspend fun updateTouchRightAction(value: PageGestureAction) = edit { it[Keys.TOUCH_RIGHT_ACTION] = value.name }
+    suspend fun updateSwipeLeftAction(value: PageGestureAction) = edit { it[Keys.SWIPE_LEFT_ACTION] = value.name }
+    suspend fun updateSwipeRightAction(value: PageGestureAction) = edit { it[Keys.SWIPE_RIGHT_ACTION] = value.name }
+    suspend fun updateSwipeUpAction(value: PageGestureAction) = edit { it[Keys.SWIPE_UP_ACTION] = value.name }
+    suspend fun updateSwipeDownAction(value: PageGestureAction) = edit { it[Keys.SWIPE_DOWN_ACTION] = value.name }
     suspend fun updatePageTransitionAnimation(value: PageTransitionAnimation) = edit { it[Keys.PAGE_TRANSITION_ANIMATION] = value.name }
     /** When [verifiedSecret] is also passed (on a successful connection test), the secret and its verified state are saved together in a single commit. */
     suspend fun updateSupabaseSharedSecret(value: String, verifiedSecret: String? = null) = edit {

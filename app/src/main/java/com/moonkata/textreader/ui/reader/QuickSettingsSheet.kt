@@ -4,17 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
@@ -25,12 +24,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,18 +45,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTransitionAnimation
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettings
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.sync.QrPairingPayload
 import com.moonkata.textreader.ui.SettingsController
 import com.moonkata.textreader.ui.qr.QrScannerDialog
@@ -66,6 +62,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showFontPicker by remember { mutableStateOf(false) }
     var showChapterPatterns by remember { mutableStateOf(false) }
 
@@ -96,25 +93,8 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
         onDismiss()
     }
 
-    // A full-screen Dialog instead of a ModalBottomSheet — this sheet's content is long enough that
-    // scrolling through it on a bottom sheet made an up/down swipe easy to mistake for the sheet's
-    // own swipe-to-dismiss gesture, closing it mid-scroll. A Dialog only closes via the back button/
-    // gesture or system back, never from a vertical drag.
-    Dialog(onDismissRequest = dismissAndCommitSync, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.settings_screen_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = dismissAndCommitSync) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.reader_back_desc))
-                        }
-                    },
-                )
-            },
-        ) { padding ->
-        Column(Modifier.fillMaxWidth().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
+    ModalBottomSheet(onDismissRequest = dismissAndCommitSync, sheetState = sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(stringResource(R.string.settings_section_font), style = MaterialTheme.typography.titleMedium)
             LabeledStepper(stringResource(R.string.settings_font_size), settings.fontSizeSp, 1f, 12f..32f, format = { "${it.toInt()}sp" }) { viewModel.setFontSizeSp(it) }
             LabeledStepper(stringResource(R.string.settings_line_height), settings.lineHeightMultiplier, 0.1f, 1.0f..2.5f, format = { "%.1f".format(it) }) { viewModel.setLineHeightMultiplier(it) }
@@ -178,32 +158,17 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
 
             SectionDivider()
             Text(stringResource(R.string.settings_section_page_turn_options), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.settings_touch_zones), style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = settings.touchTurnMode == TouchTurnMode.STANDARD,
-                    onClick = { viewModel.setTouchTurnMode(TouchTurnMode.STANDARD) },
-                    label = { Text(stringResource(R.string.settings_touch_standard)) },
-                )
-                FilterChip(
-                    selected = settings.touchTurnMode == TouchTurnMode.BOTH_NEXT,
-                    onClick = { viewModel.setTouchTurnMode(TouchTurnMode.BOTH_NEXT) },
-                    label = { Text(stringResource(R.string.settings_touch_both_next)) },
-                )
-            }
-            Text(stringResource(R.string.settings_swipe), style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = settings.swipeTurnMode == SwipeTurnMode.STANDARD,
-                    onClick = { viewModel.setSwipeTurnMode(SwipeTurnMode.STANDARD) },
-                    label = { Text(stringResource(R.string.settings_swipe_standard)) },
-                )
-                FilterChip(
-                    selected = settings.swipeTurnMode == SwipeTurnMode.BOTH_NEXT,
-                    onClick = { viewModel.setSwipeTurnMode(SwipeTurnMode.BOTH_NEXT) },
-                    label = { Text(stringResource(R.string.settings_swipe_both_next)) },
-                )
-            }
+            GestureActionRow(stringResource(R.string.settings_touch_left), settings.touchLeftAction) { viewModel.setTouchLeftAction(it) }
+            GestureActionRow(stringResource(R.string.settings_touch_right), settings.touchRightAction) { viewModel.setTouchRightAction(it) }
+            GestureActionRow(stringResource(R.string.settings_swipe_left), settings.swipeLeftAction) { viewModel.setSwipeLeftAction(it) }
+            GestureActionRow(stringResource(R.string.settings_swipe_right), settings.swipeRightAction) { viewModel.setSwipeRightAction(it) }
+            GestureActionRow(stringResource(R.string.settings_swipe_up), settings.swipeUpAction) { viewModel.setSwipeUpAction(it) }
+            GestureActionRow(stringResource(R.string.settings_swipe_down), settings.swipeDownAction) { viewModel.setSwipeDownAction(it) }
+            Text(
+                stringResource(R.string.settings_swipe_vertical_scroll_mode_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SectionDivider()
             Text(stringResource(R.string.settings_section_line_break), style = MaterialTheme.typography.titleMedium)
@@ -222,7 +187,6 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
 
             SectionDivider()
             Text(stringResource(R.string.settings_section_chapter_jump), style = MaterialTheme.typography.titleMedium)
-            SwitchRow(stringResource(R.string.settings_chapter_jump_enabled), settings.chapterJumpEnabled) { viewModel.setChapterJumpEnabled(it) }
             LabeledStepper(stringResource(R.string.settings_chapter_jump_divisions), settings.chapterJumpDivisions.toFloat(), 1f, 2f..10f, format = { "${it.toInt()}" }) {
                 viewModel.setChapterJumpDivisions(it.toInt())
             }
@@ -320,7 +284,6 @@ fun QuickSettingsSheet(viewModel: SettingsController, settings: ReaderSettings, 
 
             Spacer(Modifier.height(24.dp))
         }
-        }
     }
 
     if (showFontPicker) {
@@ -387,6 +350,28 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+/** One page-turn gesture (a touch zone or swipe direction) and its 4-way action picker. */
+@Composable
+private fun GestureActionRow(label: String, selected: PageGestureAction, onSelect: (PageGestureAction) -> Unit) {
+    Text(label, style = MaterialTheme.typography.bodyMedium)
+    // 4 chips don't all fit most phone widths at once — scrollable rather than wrapping, matching
+    // every other chip row on this sheet (Theme, page-turn mode, etc.) which are all single-line Rows.
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            PageGestureAction.PREVIOUS_PAGE to R.string.settings_gesture_previous_page,
+            PageGestureAction.NEXT_PAGE to R.string.settings_gesture_next_page,
+            PageGestureAction.PREVIOUS_CHAPTER_JUMP to R.string.settings_gesture_previous_chapter_jump,
+            PageGestureAction.NEXT_CHAPTER_JUMP to R.string.settings_gesture_next_chapter_jump,
+        ).forEach { (action, labelRes) ->
+            FilterChip(
+                selected = selected == action,
+                onClick = { onSelect(action) },
+                label = { Text(stringResource(labelRes)) },
+            )
+        }
     }
 }
 

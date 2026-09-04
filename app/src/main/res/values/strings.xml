@@ -48,7 +48,6 @@
     <string name="chapter_pattern_preset_hash_example">## Chapter 1: An Utterly Ordinary Beginning</string>
 
     <!-- Quick settings sheet -->
-    <string name="settings_screen_title">Settings</string>
     <string name="settings_section_font">Font</string>
     <string name="settings_font_size">Size</string>
     <string name="settings_line_height">Line height</string>
@@ -70,17 +69,21 @@
     <string name="settings_transition_slide">Slide</string>
     <string name="settings_transition_cover">Cover</string>
     <string name="settings_section_page_turn_options">Page-turn options</string>
-    <string name="settings_touch_zones">Touch (left/right tap)</string>
-    <string name="settings_touch_standard">Left = previous · Right = next</string>
-    <string name="settings_touch_both_next">Both sides = next</string>
-    <string name="settings_swipe">Swipe (left/right)</string>
-    <string name="settings_swipe_standard">← Next · → Previous</string>
-    <string name="settings_swipe_both_next">Both directions = next</string>
+    <string name="settings_touch_left">Touch left</string>
+    <string name="settings_touch_right">Touch right</string>
+    <string name="settings_swipe_left">Swipe left</string>
+    <string name="settings_swipe_right">Swipe right</string>
+    <string name="settings_swipe_up">Swipe up</string>
+    <string name="settings_swipe_down">Swipe down</string>
+    <string name="settings_swipe_vertical_scroll_mode_note">Swipe up/down only apply in Page turn mode — in Scroll mode, vertical dragging scrolls instead.</string>
+    <string name="settings_gesture_previous_page">Previous page</string>
+    <string name="settings_gesture_next_page">Next page</string>
+    <string name="settings_gesture_previous_chapter_jump">Previous chapter jump</string>
+    <string name="settings_gesture_next_chapter_jump">Next chapter jump</string>
     <string name="settings_section_line_break">Line breaks</string>
     <string name="settings_line_break_preserve">Keep original</string>
     <string name="settings_line_break_reflow">Reflow into paragraphs</string>
     <string name="settings_section_chapter_jump">Chapter jump</string>
-    <string name="settings_chapter_jump_enabled">On</string>
     <string name="settings_chapter_jump_divisions">Divisions</string>
     <string name="settings_chapter_pattern_button">Chapter detection patterns</string>
     <string name="settings_section_screen">Screen</string>
@@ -119,8 +122,7 @@
     <string name="reader_settings_desc">Settings</string>
     <string name="reader_toc_desc">Table of contents</string>
     <string name="reader_search_desc">Search</string>
-    <string name="reader_chapter_jump_on">Chapter jump ON</string>
-    <string name="reader_chapter_jump">Chapter jump</string>
+    <string name="reader_chapter_jump_no_pattern">No chapter pattern found</string>
     <string name="reader_external_position_title">Another device has read further</string>
     <string name="reader_external_position_message">You\'re at %1$.1f%% — another device has reached %2$.1f%%. Jump to that spot?</string>
     <string name="reader_external_position_confirm">Jump</string>

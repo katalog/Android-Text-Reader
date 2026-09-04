@@ -44,7 +44,6 @@ class InitialLoadNotBlockedByChapterDetectionTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
         }
 
         try {
@@ -77,9 +76,9 @@ class InitialLoadNotBlockedByChapterDetectionTest {
             waitUntilTrue { viewModel.uiState.value.currentPage != null }
             val startPage = viewModel.uiState.value.currentPage
 
-            viewModel.next()
+            viewModel.nextPage()
             waitUntilTrue { viewModel.uiState.value.currentPage != startPage }
-            assertNotEquals("next() should actually advance the page right after the first page is computed", startPage, viewModel.uiState.value.currentPage)
+            assertNotEquals("nextPage() should actually advance the page right after the first page is computed", startPage, viewModel.uiState.value.currentPage)
 
             // Chapter detection keeps running in the background and should eventually populate normally (regression guard).
             waitUntilTrue(timeoutMs = 10_000) { viewModel.uiState.value.chapters.isNotEmpty() }
@@ -92,7 +91,6 @@ class InitialLoadNotBlockedByChapterDetectionTest {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }

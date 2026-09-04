@@ -11,13 +11,12 @@ import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTransitionAnimation
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.db.BookEntity
 import com.moonkata.textreader.data.font.FontCatalogEntry
@@ -97,6 +96,11 @@ class ReaderViewModel(
 
     private val _navEvents = MutableSharedFlow<ReaderNavEvent>(extraBufferCapacity = 4)
     val navEvents: SharedFlow<ReaderNavEvent> = _navEvents
+
+    /** One-off, transient user-facing notices (e.g. "no chapter pattern found") — a string resource id
+     * the screen shows as a Toast. Not part of [uiState] since these aren't persistent UI state. */
+    private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+    val messages: SharedFlow<Int> = _messages
 
     private var ttsController: TtsController? = null
     private var ttsPendingRange: Pair<Int, Int>? = null
@@ -490,49 +494,66 @@ class ReaderViewModel(
         }
     }
 
-    // --- Next/previous that account for chapter jump ---
-    fun next() {
-        val state = _uiState.value
-        if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
-            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
-            val anchor = maxOf(state.currentOffset, lastChapterJumpOffset ?: Int.MIN_VALUE)
-            val target = ChapterJumpNavigator.nextBreakpoint(breakpoints, anchor)
-            if (target == null) {
-                // No more breakpoints to jump to (past the last chapter) — fall back to a plain page turn so the tap doesn't "do nothing."
-                advanceNormally(state)
-                return
-            }
-            lastChapterJumpOffset = target
-            updateCurrentOffset(target)
-            if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
-                jumpToPageAt(target)
-            } else {
-                _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
-            }
-        } else {
-            advanceNormally(state)
+    /** Routes one of the six configurable gestures (touch/swipe zones) to the action assigned to it. */
+    fun performGestureAction(action: PageGestureAction) {
+        when (action) {
+            PageGestureAction.PREVIOUS_PAGE -> previousPage()
+            PageGestureAction.NEXT_PAGE -> nextPage()
+            PageGestureAction.PREVIOUS_CHAPTER_JUMP -> previousChapterJump()
+            PageGestureAction.NEXT_CHAPTER_JUMP -> nextChapterJump()
         }
     }
 
-    fun previous() {
+    fun nextPage() = advanceNormally(_uiState.value)
+
+    fun previousPage() = retreatNormally(_uiState.value)
+
+    fun nextChapterJump() {
         val state = _uiState.value
-        if (state.settings.chapterJumpEnabled && state.chapters.isNotEmpty()) {
-            val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
-            val anchor = minOf(state.currentOffset, lastChapterJumpOffset ?: Int.MAX_VALUE)
-            val target = ChapterJumpNavigator.previousBreakpoint(breakpoints, anchor)
-            if (target == null) {
-                retreatNormally(state)
-                return
-            }
-            lastChapterJumpOffset = target
-            updateCurrentOffset(target)
-            if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
-                jumpToPageAt(target)
-            } else {
-                _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
-            }
+        if (state.chapters.isEmpty()) {
+            // No chapter pattern matched anything in this book — say so, then still turn the page
+            // normally so the gesture doesn't feel like it did nothing.
+            _messages.tryEmit(R.string.reader_chapter_jump_no_pattern)
+            advanceNormally(state)
+            return
+        }
+        val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
+        val anchor = maxOf(state.currentOffset, lastChapterJumpOffset ?: Int.MIN_VALUE)
+        val target = ChapterJumpNavigator.nextBreakpoint(breakpoints, anchor)
+        if (target == null) {
+            // No more breakpoints to jump to (past the last chapter) — fall back to a plain page turn so the tap doesn't "do nothing."
+            advanceNormally(state)
+            return
+        }
+        lastChapterJumpOffset = target
+        updateCurrentOffset(target)
+        if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+            jumpToPageAt(target)
         } else {
+            _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
+        }
+    }
+
+    fun previousChapterJump() {
+        val state = _uiState.value
+        if (state.chapters.isEmpty()) {
+            _messages.tryEmit(R.string.reader_chapter_jump_no_pattern)
             retreatNormally(state)
+            return
+        }
+        val breakpoints = ChapterJumpNavigator.breakpoints(state.chapters, state.fullText.length, state.settings.chapterJumpDivisions, state.fullText)
+        val anchor = minOf(state.currentOffset, lastChapterJumpOffset ?: Int.MAX_VALUE)
+        val target = ChapterJumpNavigator.previousBreakpoint(breakpoints, anchor)
+        if (target == null) {
+            retreatNormally(state)
+            return
+        }
+        lastChapterJumpOffset = target
+        updateCurrentOffset(target)
+        if (state.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+            jumpToPageAt(target)
+        } else {
+            _navEvents.tryEmit(ReaderNavEvent.JumpToOffset(target, animate = false))
         }
     }
 
@@ -594,15 +615,15 @@ class ReaderViewModel(
     override fun setLineBreakMode(value: LineBreakMode) = launchSetting { settingsRepository.updateLineBreakMode(value) }
     override fun setKeepScreenOnEnabled(value: Boolean) = launchSetting { settingsRepository.updateKeepScreenOnEnabled(value) }
     override fun setVolumeKeyPagingEnabled(value: Boolean) = launchSetting { settingsRepository.updateVolumeKeyPagingEnabled(value) }
-    override fun setChapterJumpEnabled(value: Boolean) {
-        lastChapterJumpOffset = null
-        launchSetting { settingsRepository.updateChapterJumpEnabled(value) }
-    }
     override fun setChapterJumpDivisions(value: Int) = launchSetting { settingsRepository.updateChapterJumpDivisions(value) }
     override fun setAutoPageTurnIntervalSeconds(value: Int) = launchSetting { settingsRepository.updateAutoPageTurnIntervalSeconds(value) }
     override fun selectFont(fontId: String) = launchSetting { settingsRepository.updateFontFamilyId(fontId) }
-    override fun setTouchTurnMode(value: TouchTurnMode) = launchSetting { settingsRepository.updateTouchTurnMode(value) }
-    override fun setSwipeTurnMode(value: SwipeTurnMode) = launchSetting { settingsRepository.updateSwipeTurnMode(value) }
+    override fun setTouchLeftAction(value: PageGestureAction) = launchSetting { settingsRepository.updateTouchLeftAction(value) }
+    override fun setTouchRightAction(value: PageGestureAction) = launchSetting { settingsRepository.updateTouchRightAction(value) }
+    override fun setSwipeLeftAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeLeftAction(value) }
+    override fun setSwipeRightAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeRightAction(value) }
+    override fun setSwipeUpAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeUpAction(value) }
+    override fun setSwipeDownAction(value: PageGestureAction) = launchSetting { settingsRepository.updateSwipeDownAction(value) }
     override fun setPageTransitionAnimation(value: PageTransitionAnimation) = launchSetting { settingsRepository.updatePageTransitionAnimation(value) }
     override fun setSupabaseSharedSecret(value: String) = launchSetting { settingsRepository.updateSupabaseSharedSecret(value) }
 
@@ -682,7 +703,7 @@ class ReaderViewModel(
     // --- Auto-advance (timer) ---
     private fun advance() {
         if (_uiState.value.settings.autoAdvanceMode != AutoAdvanceMode.TIMER) return
-        next()
+        nextPage()
     }
 
     private var lastTimerMode: AutoAdvanceMode? = null

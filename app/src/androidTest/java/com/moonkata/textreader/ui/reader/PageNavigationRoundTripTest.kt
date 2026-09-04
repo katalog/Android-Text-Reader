@@ -45,29 +45,21 @@ class PageNavigationRoundTripTest {
         val bookId = runBlocking { TestBooks.insertBook(application, bookRepository, BOOK_ASSET) }
 
         // This test uses the same DataStore as the real app — if other settings left on the real
-        // device (vertical scroll mode, auto timer advance turned on, etc.) leak in, next()/previous()
-        // may not go through page mode, or a timer could silently call next() extra times in the
-        // background, throwing off the visit-history stack relative to the count the test expects —
-        // so only the settings this test needs are forced to fixed values, then restored to their
-        // originals when done.
+        // device (vertical scroll mode, auto timer advance turned on, etc.) leak in, nextPage()/
+        // previousPage() may not go through page mode, or a timer could silently call nextPage()
+        // extra times in the background, throwing off the visit-history stack relative to the count
+        // the test expects — so only the settings this test needs are forced to fixed values, then
+        // restored to their originals when done.
         val originalSettings = runBlocking { settingsRepository.settingsFlow.first() }
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            // If chapterJumpEnabled is on, next()/previous() take ChapterJumpNavigator's
-            // evenly-divided TOC breakpoints instead of the visit-history stack, becoming a
-            // completely different navigation mode than the "per-page visit history" contract this
-            // test verifies.
-            settingsRepository.updateChapterJumpEnabled(false)
         }
 
         try {
             val viewModel = ReaderViewModel(application, bookId, bookRepository)
             waitUntilTrue { viewModel.uiState.value.paragraphs.isNotEmpty() }
-            waitUntilTrue {
-                val settings = viewModel.uiState.value.settings
-                settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE && !settings.chapterJumpEnabled
-            }
+            waitUntilTrue { viewModel.uiState.value.settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE }
 
             viewModel.onViewportMeasured(TestTextMeasurer.create(application), testParams())
             waitUntilTrue { viewModel.uiState.value.currentPage != null }
@@ -78,7 +70,7 @@ class PageNavigationRoundTripTest {
             val steps = 15
             repeat(steps) {
                 val before = viewModel.uiState.value.currentPage
-                viewModel.next()
+                viewModel.nextPage()
                 waitUntilTrue { viewModel.uiState.value.currentPage != before }
             }
 
@@ -87,7 +79,7 @@ class PageNavigationRoundTripTest {
 
             repeat(steps) {
                 val before = viewModel.uiState.value.currentPage
-                viewModel.previous()
+                viewModel.previousPage()
                 waitUntilTrue { viewModel.uiState.value.currentPage != before }
             }
 
@@ -100,7 +92,6 @@ class PageNavigationRoundTripTest {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }

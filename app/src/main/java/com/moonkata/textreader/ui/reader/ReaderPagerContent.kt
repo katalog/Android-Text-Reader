@@ -107,9 +107,7 @@ fun ReaderPagerContent(viewModel: ReaderViewModel, uiState: ReaderUiState, reade
         if (currentPage == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center))
         } else {
-            val chapterOffsets = remember(uiState.chapters, settings.chapterJumpEnabled) {
-                if (settings.chapterJumpEnabled) uiState.chapters.map { it.charOffset }.toSet() else emptySet()
-            }
+            val chapterOffsets = remember(uiState.chapters) { uiState.chapters.map { it.charOffset }.toSet() }
 
             AnimatedContent(
                 targetState = currentPage,

@@ -6,10 +6,12 @@ import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -47,9 +49,8 @@ import com.moonkata.textreader.MainActivity
 import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.OrientationLock
 import com.moonkata.textreader.data.datastore.PageTurnMode
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.ui.theme.ReaderThemePresets
+import kotlin.math.abs
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -74,6 +75,14 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
     LaunchedEffect(uiState.isLoading) {
         if (!uiState.isLoading) {
             showChrome = false
+        }
+    }
+
+    // Transient notices (e.g. "no chapter pattern found") — the app has no Snackbar/Toast
+    // infrastructure yet, so a plain Android Toast is the simplest way to surface these.
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { messageRes ->
+            Toast.makeText(context, context.getString(messageRes), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -105,8 +114,8 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         activity?.volumeKeyHandler = if (settings.volumeKeyPagingEnabled) {
             { keyCode ->
                 when (keyCode) {
-                    KeyEvent.KEYCODE_VOLUME_DOWN -> { viewModel.next(); true }
-                    KeyEvent.KEYCODE_VOLUME_UP -> { viewModel.previous(); true }
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> { viewModel.nextPage(); true }
+                    KeyEvent.KEYCODE_VOLUME_UP -> { viewModel.previousPage(); true }
                     else -> false
                 }
             }
@@ -209,7 +218,12 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                 Modifier
                     .fillMaxSize()
                     .safeDrawingPadding()
-                    .pointerInput(settings.touchTurnMode, settings.swipeTurnMode) {
+                    .pointerInput(
+                        settings.touchLeftAction, settings.touchRightAction,
+                        settings.swipeLeftAction, settings.swipeRightAction,
+                        settings.swipeUpAction, settings.swipeDownAction,
+                        settings.pageTurnMode,
+                    ) {
                         val swipeThresholdPx = 40.dp.toPx()
                         coroutineScope {
                             launch {
@@ -227,32 +241,58 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                                     val height = size.height
                                     when {
                                         offset.y < height * 0.3f -> showChrome = true
-                                        offset.x < width * 0.5f -> {
-                                            if (settings.touchTurnMode == TouchTurnMode.STANDARD) viewModel.previous() else viewModel.next()
-                                        }
-                                        else -> viewModel.next()
+                                        offset.x < width * 0.5f -> viewModel.performGestureAction(settings.touchLeftAction)
+                                        else -> viewModel.performGestureAction(settings.touchRightAction)
                                     }
                                 })
                             }
                             launch {
-                                var dragTotalX = 0f
-                                detectHorizontalDragGestures(
-                                    onDragStart = { dragTotalX = 0f },
-                                    onHorizontalDrag = { change, dragAmount ->
-                                        dragTotalX += dragAmount
-                                        change.consume()
-                                    },
-                                    onDragEnd = {
-                                        // A left swipe (<-) is the conventional direction for turning to the next
-                                        // page, so both modes treat it the same way.
-                                        when {
-                                            dragTotalX <= -swipeThresholdPx -> viewModel.next()
-                                            dragTotalX >= swipeThresholdPx -> {
-                                                if (settings.swipeTurnMode == SwipeTurnMode.STANDARD) viewModel.previous() else viewModel.next()
+                                if (settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+                                    // Both axes are tracked and only the axis with the larger total movement is
+                                    // acted on, so a diagonal drag doesn't ambiguously trigger both a horizontal
+                                    // and a vertical action.
+                                    var dragTotalX = 0f
+                                    var dragTotalY = 0f
+                                    detectDragGestures(
+                                        onDragStart = { dragTotalX = 0f; dragTotalY = 0f },
+                                        onDrag = { change, dragAmount ->
+                                            dragTotalX += dragAmount.x
+                                            dragTotalY += dragAmount.y
+                                            change.consume()
+                                        },
+                                        onDragEnd = {
+                                            if (abs(dragTotalX) >= abs(dragTotalY)) {
+                                                when {
+                                                    dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeLeftAction)
+                                                    dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeRightAction)
+                                                }
+                                            } else {
+                                                when {
+                                                    dragTotalY <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeUpAction)
+                                                    dragTotalY >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeDownAction)
+                                                }
                                             }
-                                        }
-                                    },
-                                )
+                                        },
+                                    )
+                                } else {
+                                    // Scroll mode: vertical dragging is already the scroll gesture itself
+                                    // (ReaderScrollContent's LazyColumn), so only horizontal swipe is
+                                    // available here — swipe up/down actions don't apply in this mode.
+                                    var dragTotalX = 0f
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { dragTotalX = 0f },
+                                        onHorizontalDrag = { change, dragAmount ->
+                                            dragTotalX += dragAmount
+                                            change.consume()
+                                        },
+                                        onDragEnd = {
+                                            when {
+                                                dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeLeftAction)
+                                                dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeRightAction)
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     },
@@ -273,12 +313,10 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
                 ReaderTopBar(
                     title = uiState.book?.displayName ?: "",
                     readerColors = readerColors,
-                    chapterJumpEnabled = settings.chapterJumpEnabled,
                     onBack = onBack,
                     onToc = { showToc = true },
                     onSearch = { showSearch = true },
                     onSettings = { showQuickSettings = true },
-                    onToggleChapterJump = { viewModel.setChapterJumpEnabled(!settings.chapterJumpEnabled) },
                 )
             }
             // A small always-on indicator so the read percentage isn't lost even while the top bar is

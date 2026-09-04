@@ -3,11 +3,10 @@ package com.moonkata.textreader.ui
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
+import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTransitionAnimation
 import com.moonkata.textreader.data.datastore.PageTurnMode
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
 import com.moonkata.textreader.data.datastore.ThemePreset
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.font.FontCatalogEntry
 import com.moonkata.textreader.data.font.FontDownloadState
 import kotlinx.coroutines.flow.Flow
@@ -21,10 +20,10 @@ import kotlinx.coroutines.flow.Flow
  * etc. without opening a book from the library screen.
  *
  * The reader-side implementation layers on side effects beyond just persisting the value (e.g. starting
- * TTS narration immediately if the auto-advance mode is set to TTS, resetting the visit history when
- * toggling chapter jump mode), while the library-side implementation just persists the value since there's
- * no open book — later, when a book is actually opened, `ReaderViewModel` reads the persisted settings and
- * applies the necessary side effects at that point.
+ * TTS narration immediately if the auto-advance mode is set to TTS), while the library-side
+ * implementation just persists the value since there's no open book — later, when a book is actually
+ * opened, `ReaderViewModel` reads the persisted settings and applies the necessary side effects at
+ * that point.
  */
 interface SettingsController {
     fun setFontSizeSp(value: Float)
@@ -41,12 +40,15 @@ interface SettingsController {
     fun setLineBreakMode(value: LineBreakMode)
     fun setKeepScreenOnEnabled(value: Boolean)
     fun setVolumeKeyPagingEnabled(value: Boolean)
-    fun setChapterJumpEnabled(value: Boolean)
     fun setChapterJumpDivisions(value: Int)
     fun setAutoPageTurnIntervalSeconds(value: Int)
     fun selectFont(fontId: String)
-    fun setTouchTurnMode(value: TouchTurnMode)
-    fun setSwipeTurnMode(value: SwipeTurnMode)
+    fun setTouchLeftAction(value: PageGestureAction)
+    fun setTouchRightAction(value: PageGestureAction)
+    fun setSwipeLeftAction(value: PageGestureAction)
+    fun setSwipeRightAction(value: PageGestureAction)
+    fun setSwipeUpAction(value: PageGestureAction)
+    fun setSwipeDownAction(value: PageGestureAction)
     fun setPageTransitionAnimation(value: PageTransitionAnimation)
     fun setSupabaseSharedSecret(value: String)
     fun setAutoAdvanceMode(mode: AutoAdvanceMode)

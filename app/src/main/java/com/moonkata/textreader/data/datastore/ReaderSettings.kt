@@ -9,11 +9,12 @@ enum class OrientationLock { AUTO, PORTRAIT, LANDSCAPE }
 enum class LineBreakMode { PRESERVE, REFLOW }
 enum class AutoAdvanceMode { OFF, TIMER, TTS }
 
-/** Mapping for turning pages via left/right screen taps. STANDARD: left=previous/right=next, BOTH_NEXT: both sides go next. */
-enum class TouchTurnMode { STANDARD, BOTH_NEXT }
-
-/** Mapping for turning pages via left/right swipe. STANDARD: <- next / -> previous, BOTH_NEXT: both directions go next. */
-enum class SwipeTurnMode { STANDARD, BOTH_NEXT }
+/**
+ * What a page-turn gesture (touch zone or swipe direction) does. Each of the six gestures
+ * (touch left/right, swipe left/right/up/down) is assigned one of these independently, so e.g.
+ * swiping up can jump chapters while a left tap still turns the page normally.
+ */
+enum class PageGestureAction { PREVIOUS_PAGE, NEXT_PAGE, PREVIOUS_CHAPTER_JUMP, NEXT_CHAPTER_JUMP }
 
 /** Transition effect when turning a page. NONE: instant switch, SLIDE: both pages slide together, COVER: the new page slides over the top. */
 enum class PageTransitionAnimation { NONE, SLIDE, COVER }
@@ -36,7 +37,6 @@ data class ReaderSettings(
     val lineBreakMode: LineBreakMode = LineBreakMode.PRESERVE,
     val keepScreenOnEnabled: Boolean = true,
     val volumeKeyPagingEnabled: Boolean = false,
-    val chapterJumpEnabled: Boolean = false,
     val chapterJumpDivisions: Int = 4,
     val autoAdvanceMode: AutoAdvanceMode = AutoAdvanceMode.OFF,
     val autoPageTurnIntervalSeconds: Int = 15,
@@ -46,8 +46,12 @@ data class ReaderSettings(
     val librarySortOption: FolderSortOption = FolderSortOption.NAME_ASC,
     val chapterPatternEnabledIds: Set<String> = ChapterPatternCatalog.defaultEnabledIds,
     val chapterCustomPatterns: Set<String> = emptySet(),
-    val touchTurnMode: TouchTurnMode = TouchTurnMode.STANDARD,
-    val swipeTurnMode: SwipeTurnMode = SwipeTurnMode.STANDARD,
+    val touchLeftAction: PageGestureAction = PageGestureAction.PREVIOUS_PAGE,
+    val touchRightAction: PageGestureAction = PageGestureAction.NEXT_PAGE,
+    val swipeLeftAction: PageGestureAction = PageGestureAction.NEXT_PAGE,
+    val swipeRightAction: PageGestureAction = PageGestureAction.PREVIOUS_PAGE,
+    val swipeUpAction: PageGestureAction = PageGestureAction.NEXT_CHAPTER_JUMP,
+    val swipeDownAction: PageGestureAction = PageGestureAction.PREVIOUS_CHAPTER_JUMP,
     val pageTransitionAnimation: PageTransitionAnimation = PageTransitionAnimation.NONE,
     // VSCode reading-position sync (.docs/VSCODE_SYNC_PLAN.md) — the Supabase URL/publishable key are
     // fine to be public anyway (RLS is the actual line of defense), so they're hardcoded in

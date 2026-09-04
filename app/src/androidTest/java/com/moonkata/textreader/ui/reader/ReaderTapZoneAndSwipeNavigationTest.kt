@@ -15,10 +15,9 @@ import androidx.compose.ui.test.swipeRight
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
+import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
-import com.moonkata.textreader.data.datastore.SwipeTurnMode
-import com.moonkata.textreader.data.datastore.TouchTurnMode
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.repository.BookRepository
@@ -32,10 +31,11 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * The mapping from `ReaderScreen`'s tap zones/swipes to `viewModel.next()`/`previous()`
- * (USER_SCENARIOS.md §4) has, until now, only been confirmed by `ReaderChromeAutoHideTest` in the
- * form of "a center tap doesn't turn the page" — whether the actual tap zones (left/right halves)
- * or swipes turn to next or previous according to `TouchTurnMode`/`SwipeTurnMode` has never been verified.
+ * The mapping from `ReaderScreen`'s tap zones/swipes to `viewModel.performGestureAction` (each of
+ * the six gestures assigned an independent `PageGestureAction`) has, until now, only been confirmed
+ * by `ReaderChromeAutoHideTest` in the form of "a center tap doesn't turn the page" — whether the
+ * actual tap zones (left/right halves) or swipes turn to next or previous according to their
+ * assigned action has never been verified.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderTapZoneAndSwipeNavigationTest {
@@ -63,7 +63,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
         composeTestRule.onAllNodesWithText(marker, substring = true).fetchSemanticsNodes().isNotEmpty()
 
     @Test
-    fun tapZones_touchTurnModeStandard_rightGoesNext_leftGoesPrevious() {
+    fun tapZones_leftPreviousRightNext_rightGoesNext_leftGoesPrevious() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
         val bookRepository = BookRepository(application, db.bookDao())
@@ -74,8 +74,8 @@ class ReaderTapZoneAndSwipeNavigationTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
-            settingsRepository.updateTouchTurnMode(TouchTurnMode.STANDARD)
+            settingsRepository.updateTouchLeftAction(PageGestureAction.PREVIOUS_PAGE)
+            settingsRepository.updateTouchRightAction(PageGestureAction.NEXT_PAGE)
         }
         val bookId = setUpBook(application, bookRepository, marker)
 
@@ -90,22 +90,22 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.8f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // In STANDARD mode, tapping the left half -> goes to previous page (the marker must reappear).
+            // touchLeftAction=PREVIOUS_PAGE -> tapping the left half goes to previous page (the marker must reappear).
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { firstMarkerVisible(marker) }
         } finally {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
-                settingsRepository.updateTouchTurnMode(originalSettings.touchTurnMode)
+                settingsRepository.updateTouchLeftAction(originalSettings.touchLeftAction)
+                settingsRepository.updateTouchRightAction(originalSettings.touchRightAction)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }
     }
 
     @Test
-    fun tapZones_touchTurnModeBothNext_leftAlsoGoesNext() {
+    fun tapZones_bothSidesNext_leftAlsoGoesNext() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
         val bookRepository = BookRepository(application, db.bookDao())
@@ -116,8 +116,8 @@ class ReaderTapZoneAndSwipeNavigationTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
-            settingsRepository.updateTouchTurnMode(TouchTurnMode.BOTH_NEXT)
+            settingsRepository.updateTouchLeftAction(PageGestureAction.NEXT_PAGE)
+            settingsRepository.updateTouchRightAction(PageGestureAction.NEXT_PAGE)
         }
         val bookId = setUpBook(application, bookRepository, marker)
 
@@ -132,28 +132,28 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.8f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // In BOTH_NEXT mode, the left tap is also "next", so it must not return to the first page (the marker must stay hidden).
+            // Both zones are NEXT_PAGE, so the left tap must not return to the first page (the marker must stay hidden).
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertFalse(
-                "In BOTH_NEXT mode, the left tap must also go to the next page, so it must not return to the first page",
+                "When both tap zones are NEXT_PAGE, the left tap must also go to the next page, so it must not return to the first page",
                 firstMarkerVisible(marker),
             )
         } finally {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
-                settingsRepository.updateTouchTurnMode(originalSettings.touchTurnMode)
+                settingsRepository.updateTouchLeftAction(originalSettings.touchLeftAction)
+                settingsRepository.updateTouchRightAction(originalSettings.touchRightAction)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }
     }
 
     @Test
-    fun swipeGestures_swipeTurnModeStandard_leftGoesNext_rightGoesPrevious() {
+    fun swipeGestures_leftNextRightPrevious_leftGoesNext_rightGoesPrevious() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
         val bookRepository = BookRepository(application, db.bookDao())
@@ -164,8 +164,8 @@ class ReaderTapZoneAndSwipeNavigationTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
-            settingsRepository.updateSwipeTurnMode(SwipeTurnMode.STANDARD)
+            settingsRepository.updateSwipeLeftAction(PageGestureAction.NEXT_PAGE)
+            settingsRepository.updateSwipeRightAction(PageGestureAction.PREVIOUS_PAGE)
         }
         val bookId = setUpBook(application, bookRepository, marker)
 
@@ -176,26 +176,26 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
             waitForChromeToHide()
 
-            // Swipe left (<-) -> always goes to the next page.
+            // Swipe left (<-) -> goes to the next page.
             composeTestRule.onRoot().performTouchInput { swipeLeft() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // In STANDARD mode, swiping right (->) -> goes to the previous page (marker returns).
+            // swipeRightAction=PREVIOUS_PAGE -> swiping right (->) goes to the previous page (marker returns).
             composeTestRule.onRoot().performTouchInput { swipeRight() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { firstMarkerVisible(marker) }
         } finally {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
-                settingsRepository.updateSwipeTurnMode(originalSettings.swipeTurnMode)
+                settingsRepository.updateSwipeLeftAction(originalSettings.swipeLeftAction)
+                settingsRepository.updateSwipeRightAction(originalSettings.swipeRightAction)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }
     }
 
     @Test
-    fun swipeGestures_swipeTurnModeBothNext_rightAlsoGoesNext() {
+    fun swipeGestures_bothDirectionsNext_rightAlsoGoesNext() {
         val application = ApplicationProvider.getApplicationContext<Application>()
         val db = AppDatabase.getDatabase(application)
         val bookRepository = BookRepository(application, db.bookDao())
@@ -206,8 +206,8 @@ class ReaderTapZoneAndSwipeNavigationTest {
         runBlocking {
             settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
             settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
-            settingsRepository.updateChapterJumpEnabled(false)
-            settingsRepository.updateSwipeTurnMode(SwipeTurnMode.BOTH_NEXT)
+            settingsRepository.updateSwipeLeftAction(PageGestureAction.NEXT_PAGE)
+            settingsRepository.updateSwipeRightAction(PageGestureAction.NEXT_PAGE)
         }
         val bookId = setUpBook(application, bookRepository, marker)
 
@@ -221,21 +221,21 @@ class ReaderTapZoneAndSwipeNavigationTest {
             composeTestRule.onRoot().performTouchInput { swipeLeft() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
 
-            // In BOTH_NEXT mode, swiping right is also "next", so it must not return to the first page.
+            // Both directions are NEXT_PAGE, so swiping right must also not return to the first page.
             composeTestRule.onRoot().performTouchInput { swipeRight() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
-                "In BOTH_NEXT mode, swiping right must also go to the next page, so it must not return to the first page",
+                "When both swipe directions are NEXT_PAGE, swiping right must also go to the next page, so it must not return to the first page",
                 !firstMarkerVisible(marker),
             )
         } finally {
             runBlocking {
                 settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
                 settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
-                settingsRepository.updateChapterJumpEnabled(originalSettings.chapterJumpEnabled)
-                settingsRepository.updateSwipeTurnMode(originalSettings.swipeTurnMode)
+                settingsRepository.updateSwipeLeftAction(originalSettings.swipeLeftAction)
+                settingsRepository.updateSwipeRightAction(originalSettings.swipeRightAction)
                 db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
             }
         }
