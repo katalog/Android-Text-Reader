@@ -1,5 +1,9 @@
 # 계획: 동기화 기능 공개 배포 준비 (멀티테넌시 + QR 페어링 + 시크릿 관리)
 
+> **⚠️ 이 문서가 서술하는 시점 이후, PC 서버 코드는 이 저장소에서 분리돼 별도 저장소
+> [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)로
+> 이사했습니다.** 아래 본문의 `external_library/sync_server/` 경로 언급은 그 시점 기준 기록입니다.
+
 **상태**: 스테이지 1~6(Supabase 멀티테넌시 전환, 요청량 튜닝, Supabase 설정값 저장소 노출 정리,
 안드로이드 공용 QR 스캐너, VSCode 읽기위치 동기화 QR 페어링, PC 파일 동기화 QR 페어링) ✅
 완료(2026-09-03). `Android-Text-Reader`/`vscode-moonkata-reader-sync` 둘 다 `sync-qrcode` 브랜치에서

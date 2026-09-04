@@ -211,7 +211,7 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
     실패하는지**(TOFU의 핵심 방어선), `/list` 응답 파싱, `/file` 다운로드 바이트가 정확히 스트리밍
     되는지, 경로 URL 인코딩, `/ping` 응답으로 `isPcSyncServer` 판정. `PC_SYNC_PORT`(58221)가
     `PcSyncClient`에 하드코딩돼 있어 MockWebServer도 임의 포트가 아니라 그 고정 포트로 직접 띄웁니다.
-  - (Go, `external_library/sync_server`) `filelist_test.go` — `go test ./...`로 별도 실행(안드로이드
+  - (Go, 현재는 별도 저장소 [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)) `filelist_test.go` — `go test ./...`로 별도 실행(안드로이드
     Gradle 빌드에 안 묶임). `resolveFilePath`의 경로 탈출 방지(`../`, 절대경로, 루트 자체)는 추가 당시
     테스트가 하나도 없던 보안 관련 로직이라 우선 커버; `listFilesRecursively`의 dotfile/dot폴더
     스킵(Syncthing 마커 파일 회귀), 확장자 필터, 빈 폴더에서 `nil`이 아니라 빈 슬라이스를 돌려주는지
@@ -333,7 +333,7 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
   - (androidTest) `PcSyncSheetTest`의 실패 문구 검증을 정확히 일치 비교에서 `"연결 실패 —"` 접두사
     포함(substring) 비교로 변경 — 이 라운드에서 실제 실패 원인 문자열을 화면에 그대로 보여주도록
     UI를 바꾸면서(`lastTestConnectionError`) 문구 자체가 매번 달라질 수 있게 됐기 때문입니다.
-  - (Go, `external_library/sync_server`) `pair_test.go`의 `TestHandlePair_HostFieldHasNoPort` —
+  - (Go, `go-moonkata-reader-sync-server` 저장소) `pair_test.go`의 `TestHandlePair_HostFieldHasNoPort` —
     `/pair`가 만드는 QR 페이로드의 `host` 필드에 포트가 안 붙어 있는지. 안드로이드의 `PcSyncClient`가
     호스트에 고정 포트(58221)를 스스로 붙이는 구조라, 포트가 QR에도 같이 실리면 `"IP:포트:포트"`로
     겹쳐 `MalformedURLException`이 나던 실사용 버그의 회귀 방지입니다.
@@ -366,7 +366,7 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
 - **`PcHostScanner`의 실제 서브넷 스캔** — `ConnectivityManager`가 돌려주는 로컬 IP와 실제 LAN 환경에
   의존해 에뮬레이터/CI에서 의미 있게 재현하기 어렵습니다. `PcSyncClient.isPcSyncServer`(스캔이 후보마다
   호출하는 핵심 판정 로직)는 `PcSyncClientTest`로 커버합니다.
-- **Go PC 서버(`external_library/sync_server`)의 HTTP 핸들러/트레이 UI/자동 실행 전체 흐름** —
+- **Go PC 서버(`go-moonkata-reader-sync-server` 저장소)의 HTTP 핸들러/트레이 UI/자동 실행 전체 흐름** —
   순수 로직(`resolveFilePath`, `listFilesRecursively`)만 `go test`로 커버하고, `server.go`의 실제
   라우팅이나 `tray.go`/`autostart_windows.go`의 OS 연동은 `PC_SYNC_SERVER_PLAN.md`에 기록된 실기기
   검증(포트 바인딩, `/ping`·`/list`·`/file` 실제 왕복, Windows 시작 프로그램 레지스트리 키 실행까지

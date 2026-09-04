@@ -7,9 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **문카타 리더 (Moonkata Reader)** — 로컬 `.txt` 소설을 읽기 위한 오프라인 우선 단일 사용자 안드로이드 앱.
 핵심 읽기 경험은 서버/로그인/네트워크 없이 완전 오프라인 동작. 기본 꺼짐인 선택적 기기 간 동기화 기능이
 둘 있음 — VSCode와 읽기 위치 공유(Supabase 경유, `data/sync/ReadingPositionSyncClient.kt`), PC와 책
-파일 동기화(자체 Go 트레이 서버, HTTPS+TLS 지문 고정, `data/sync/PcSyncClient.kt` +
-`external_library/sync_server/`). Kotlin + Jetpack Compose, 수동 MVVM(`AndroidViewModel` +
-Repository), DI 프레임워크 없음.
+파일 동기화(자체 Go 트레이 서버, HTTPS+TLS 지문 고정, `data/sync/PcSyncClient.kt` + 별도 저장소
+[go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)). Kotlin +
+Jetpack Compose, 수동 MVVM(`AndroidViewModel` + Repository), DI 프레임워크 없음. 이 저장소는
+[moonkata-reader-project](https://github.com/katalog/moonkata-reader-project) 우산 프로젝트의 안드로이드
+앱 부분이며, VSCode 확장은 [vscode-moonkata-reader-sync](https://github.com/katalog/vscode-moonkata-reader-sync)에 있음.
 
 자세한 기능 목록과 설계 배경은 [README.md](README.md)(영문) / [README.ko.md](README.ko.md)(한글) 참고.
 처음 이 저장소에 들어왔다면 [.docs/ONBOARDING.md](.docs/ONBOARDING.md)(빌드/테스트 실행법, 코드 지도,

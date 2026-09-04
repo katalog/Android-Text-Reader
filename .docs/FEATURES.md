@@ -498,9 +498,10 @@ OFL 한글 폰트 카탈로그에서 골라 앱 내부 저장소에 받고, Comp
 ## 16. PC 파일 동기화
 
 **무엇을 하나**
-PC에서 실행하는 별도 트레이 앱([`external_library/sync_server`](../external_library/sync_server),
-Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더를 라이브러리 폴더의 거울(단방향 PC→폰)로
-동기화합니다. Wi-Fi에서 서로 붙어 있으면 되고, 클라우드 저장소나 로그인 없이 PC를 직접 서버로 씁니다.
+PC에서 실행하는 별도 트레이 앱([go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server),
+별도 저장소, Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더를 라이브러리 폴더의 거울(단방향
+PC→폰)로 동기화합니다. Wi-Fi에서 서로 붙어 있으면 되고, 클라우드 저장소나 로그인 없이 PC를 직접 서버로
+씁니다.
 자세한 설계 배경은 [`PC_SYNC_SERVER_PLAN.md`](PC_SYNC_SERVER_PLAN.md).
 
 **파일 — 안드로이드 쪽**
@@ -518,7 +519,7 @@ Go)이 지정한 폴더를 HTTPS로 공유하면, 안드로이드가 그 폴더�
 | QR 페이로드 파싱(`{"type":"pc_sync","host":...,"secret":...,"fingerprint":...}`) | `data/sync/QrPairingPayload.kt` (`PcSync`) |
 | 카메라로 QR 스캔(§15와 공유) | `ui/qr/QrScannerDialog.kt` |
 
-**파일 — PC 쪽 (Go, `external_library/sync_server`)**
+**파일 — PC 쪽 (Go, 별도 저장소 [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server))**
 
 | 역할 | 파일 |
 |---|---|
@@ -616,5 +617,6 @@ DataStore (reader_settings)
 `MockWebServer`(HTTPS 포함)로 검증하는 PC/Supabase 요청 프로토콜 계약까지가 자동화 테스트 범위이고,
 실제 카메라 QR 스캔·SAF 파일 쓰기·서브넷 스캔·PC 쪽 트레이 UI/Windows 자동 실행은 실기기 수동 검증으로
 남겨뒀습니다(`TESTING.md`의 "의도적으로 제외" 참고). PC 서버(Go)의 경로 탈출 방지 로직과 `/pair`의
-호스트 필드 형식(`TestHandlePair_HostFieldHasNoPort`)은 `external_library/sync_server`에서
+호스트 필드 형식(`TestHandlePair_HostFieldHasNoPort`)은 별도 저장소
+[go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)에서
 `go test ./...`로 별도 검증합니다.

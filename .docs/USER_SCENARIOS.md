@@ -6,8 +6,8 @@
 이렇게 짰는지"는 다루지 않습니다 — 각 시나리오 끝의 `FEATURES.md` 절 번호를 따라가면 그 설계 배경이
 있고, 거기서도 안 풀리면 [DESIGN_RATIONALE.md](DESIGN_RATIONALE.md)로 가세요.
 
-파일 경로는 모두 `app/src/main/java/com/moonkata/textreader/` 기준 상대경로이고, PC 서버 쪽은
-`external_library/sync_server/` 기준입니다.
+파일 경로는 모두 `app/src/main/java/com/moonkata/textreader/` 기준 상대경로이고, PC 서버 쪽은 별도 저장소
+[go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server) 루트 기준입니다.
 
 > **읽는 요령**: 번호가 매겨진 단계는 실제 호출 순서 그대로입니다. ⚠️ 표시가 붙은 단계는 "왜 이렇게
 > 갈라지는지" 알아야 나머지가 이해되는 지점이니 건너뛰지 마세요.

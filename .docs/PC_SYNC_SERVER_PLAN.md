@@ -1,5 +1,11 @@
 # 계획: PC 트레이 서버 기반 PC → 안드로이드 단방향 파일 동기화
 
+> **⚠️ 이 문서가 서술하는 시점 이후, PC 서버 코드는 이 저장소에서 분리돼 별도 저장소
+> [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)로
+> 이사했습니다.** 아래 본문의 `external_library/sync_server/` 경로 언급은 전부 그 시점 기준 기록이고,
+> 지금은 그 저장소 루트에 해당합니다 — 이 문서 자체는 그대로 두되(당시 설계 배경 기록으로서의 가치),
+> 새로 뭔가 고치려면 새 저장소로 가야 합니다.
+
 **상태**: P1~P3, A1~A2/A4 전부 완료. HTTPS(자체 서명 인증서 + TOFU 지문 고정)로 전환 완료 — cleartext
 설정 전부 제거함. 델타 비교에서 로컬 수정시각 의존성 제거(재동기화 때 안 바뀐 파일까지 매번 다시
 받던 버그 수정). [SMB_FILE_SYNC_PLAN.md](SMB_FILE_SYNC_PLAN.md)를 대체. 여러 사용자 대상 QR 페어링

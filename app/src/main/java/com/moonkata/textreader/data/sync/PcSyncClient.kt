@@ -16,11 +16,12 @@ data class PcRemoteFile(
     val lastModifiedMillis: Long,
 )
 
-/** 고정 포트 — .docs/PC_SYNC_SERVER_PLAN.md §2, PC 서버(external_library/sync_server)와 동일 값이어야 함. */
+/** 고정 포트 — .docs/PC_SYNC_SERVER_PLAN.md §2, PC 서버(별도 저장소 go-moonkata-reader-sync-server)와
+ * 동일 값이어야 함. */
 const val PC_SYNC_PORT = 58221
 
 /**
- * PC 트레이 서버(external_library/sync_server, Go)에 접속 — .docs/PC_SYNC_SERVER_PLAN.md §5.
+ * PC 트레이 서버(별도 저장소 go-moonkata-reader-sync-server, Go)에 접속 — .docs/PC_SYNC_SERVER_PLAN.md §5.
  * `ReadingPositionSyncClient`와 같은 스타일(`HttpURLConnection` 계열 직접 사용, 새 의존성 없음). 공유
  * 시크릿은 `x-moonkata-secret` 헤더로 보낸다.
  *

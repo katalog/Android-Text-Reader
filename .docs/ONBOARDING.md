@@ -19,8 +19,10 @@
 부분은 거의 다 이 셋 중 하나 때문입니다.**
 
 여기에 선택 기능으로 기기 간 동기화가 둘 붙어 있습니다(둘 다 기본 꺼짐): PC의 VSCode와 읽던 위치를
-공유하는 것, 그리고 PC에서 책 파일 자체를 받아오는 것. 후자는 PC에서 돌리는 별도 Go 프로그램
-(`external_library/sync_server/`)이 짝입니다.
+공유하는 것, 그리고 PC에서 책 파일 자체를 받아오는 것. 후자는 PC에서 돌리는 별도 Go 프로그램이 짝인데,
+이 저장소 안이 아니라 별도 저장소 [go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)에 있습니다 — 이 저장소는
+[moonkata-reader-project](https://github.com/katalog/moonkata-reader-project) 우산 프로젝트의 안드로이드
+앱 부분입니다.
 
 ---
 
@@ -73,10 +75,11 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.moonkata.textreader.data.parser.PaginatorTest
 ```
 
-**PC 서버(Go) 테스트**는 Gradle과 완전히 별개입니다:
+**PC 서버(Go) 테스트**는 이 저장소가 아니라 별도 저장소
+[go-moonkata-reader-sync-server](https://github.com/katalog/go-moonkata-reader-sync-server)에 있습니다:
 
 ```bash
-cd external_library/sync_server && go test ./...
+git clone https://github.com/katalog/go-moonkata-reader-sync-server && cd go-moonkata-reader-sync-server && go test ./...
 ```
 
 ---
@@ -95,7 +98,7 @@ cd external_library/sync_server && go test ./...
 | 책 정보·읽기 위치(영구 저장) | `data/db/` |
 | 파일 읽기, 인코딩 감지, zip | `data/file/` |
 | 폰트 다운로드·적용 | `data/font/` |
-| 기기 간 동기화 | `data/sync/` + `external_library/sync_server/` |
+| 기기 간 동기화 | `data/sync/` (PC 서버 쪽 코드는 별도 저장소 `go-moonkata-reader-sync-server`) |
 | 동기화 QR 스캔/생성 | `ui/qr/QrScannerDialog.kt`, `data/sync/QrPairingPayload.kt` (PC 서버 쪽은 `pair.go`) |
 | 서재 화면에서 리더를 안 거치고 설정/정렬/PC동기화 열기 | `ui/SettingsController.kt` (리더·서재 두
   ViewModel이 공통 구현) |
@@ -104,8 +107,8 @@ cd external_library/sync_server && go test ./...
 
 - **`ReaderViewModel.kt`가 600줄이 넘습니다. 겁먹지 마세요.** 처음에 볼 함수는 `next()`,
   `previous()`, `updateCurrentOffset()` **세 개**뿐입니다. 나머지는 그 기능을 건드릴 때 찾아가면 됩니다.
-- `external_library/sync_server/`(Go)는 앱과 완전히 분리돼 있습니다. 동기화 일을 안 한다면 안 열어봐도
-  됩니다.
+- PC 서버(Go)는 이제 아예 다른 저장소(`go-moonkata-reader-sync-server`)라 앱과 완전히 분리돼 있습니다.
+  동기화 일을 안 한다면 클론할 필요도 없습니다.
 - `data/font/FontCatalog.kt`의 URL 목록은 그냥 데이터입니다.
 
 ---
@@ -141,8 +144,10 @@ cd external_library/sync_server && go test ./...
 
 **⑥ 릴리스 버전은 `build.gradle.kts`가 아니라 git 태그에서 옵니다**
 `v1.4.0` 태그를 push하면 그게 곧 앱 버전이 됩니다. 그리고 **서명 키가 없으면 조용히 디버그 키로
-폴백합니다** — 에러가 안 나니 확인하세요. PC 서버는 태그 접두사가 달라서(`sync-server-v*`) 다른
-워크플로우가 돕니다.
+폴백합니다** — 에러가 안 나니 확인하세요. PC 서버(`go-moonkata-reader-sync-server`)와 VSCode 확장
+(`vscode-moonkata-reader-sync`)은 각자 자기 저장소에서 같은 `v*` 태그 형식으로 따로 릴리즈됩니다 —
+`moonkata-reader-project` 우산 저장소에 태그를 붙이면 세 저장소로 그 태그가 전파돼 한 번에 릴리즈되는
+자동화가 있습니다(자세한 흐름은 `moonkata-reader-project`의 README 참고).
 
 ---
 
