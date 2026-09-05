@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,8 +52,6 @@ import com.moonkata.textreader.data.datastore.OrientationLock
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.ui.theme.ReaderThemePresets
 import kotlin.math.abs
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 
 @Composable
 fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
@@ -211,99 +210,119 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
     val progress = if (uiState.fullText.isNotEmpty()) uiState.currentOffset.toFloat() / uiState.fullText.length else 0f
 
     Box(Modifier.fillMaxSize().background(readerColors.background)) {
-        if (uiState.isLoading) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center))
-        } else {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .safeDrawingPadding()
-                    .pointerInput(
-                        settings.touchLeftAction, settings.touchRightAction,
-                        settings.swipeLeftAction, settings.swipeRightAction,
-                        settings.swipeUpAction, settings.swipeDownAction,
-                        settings.pageTurnMode,
-                    ) {
-                        val swipeThresholdPx = 40.dp.toPx()
-                        coroutineScope {
-                            launch {
-                                // While the top/bottom bars are showing, any tap (unless it's actually on a
-                                // button) just closes them, regardless of position — this avoids a page turn
-                                // happening at the same time and causing confusion. The buttons themselves sit
-                                // above this pointerInput in z-order and consume their own clicks first, so
-                                // taps on them never reach here.
-                                detectTapGestures(onTap = { offset ->
-                                    if (showChrome) {
-                                        showChrome = false
-                                        return@detectTapGestures
-                                    }
-                                    val width = size.width
-                                    val height = size.height
-                                    when {
-                                        offset.y < height * 0.3f -> showChrome = true
-                                        offset.x < width * 0.5f -> viewModel.performGestureAction(settings.touchLeftAction)
-                                        else -> viewModel.performGestureAction(settings.touchRightAction)
-                                    }
-                                })
-                            }
-                            launch {
-                                if (settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
-                                    // Both axes are tracked and only the axis with the larger total movement is
-                                    // acted on, so a diagonal drag doesn't ambiguously trigger both a horizontal
-                                    // and a vertical action.
-                                    var dragTotalX = 0f
-                                    var dragTotalY = 0f
-                                    detectDragGestures(
-                                        onDragStart = { dragTotalX = 0f; dragTotalY = 0f },
-                                        onDrag = { change, dragAmount ->
-                                            dragTotalX += dragAmount.x
-                                            dragTotalY += dragAmount.y
-                                            change.consume()
-                                        },
-                                        onDragEnd = {
-                                            if (abs(dragTotalX) >= abs(dragTotalY)) {
-                                                when {
-                                                    dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeLeftAction)
-                                                    dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeRightAction)
-                                                }
-                                            } else {
-                                                when {
-                                                    dragTotalY <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeUpAction)
-                                                    dragTotalY >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeDownAction)
-                                                }
-                                            }
-                                        },
-                                    )
-                                } else {
-                                    // Scroll mode: vertical dragging is already the scroll gesture itself
-                                    // (ReaderScrollContent's LazyColumn), so only horizontal swipe is
-                                    // available here — swipe up/down actions don't apply in this mode.
-                                    var dragTotalX = 0f
-                                    detectHorizontalDragGestures(
-                                        onDragStart = { dragTotalX = 0f },
-                                        onHorizontalDrag = { change, dragAmount ->
-                                            dragTotalX += dragAmount
-                                            change.consume()
-                                        },
-                                        onDragEnd = {
-                                            when {
-                                                dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(settings.swipeLeftAction)
-                                                dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(settings.swipeRightAction)
-                                            }
-                                        },
-                                    )
-                                }
-                            }
+        // Mounted unconditionally (not just once isLoading is false) so its pointerInput coroutine
+        // has already been running and idling in awaitPointerEventScope well before the user's first
+        // real tap. Compose's pointerInput modifier only starts executing its block once the first
+        // pointer event actually reaches it — if this Box were only created the moment loading
+        // finishes (right when the user's first tap tends to land), that very first touch can double
+        // as the event that boots the coroutine, get consumed by that bootstrap, and never reach
+        // detectTapGestures' own awaitFirstDown — silently swallowing the first tap after opening any
+        // book. Mounting it immediately (showing just the spinner as its content while loading) gives
+        // the coroutine the entire loading time to settle before any tap can land.
+        //
+        // Read via a stable reference inside the long-lived pointerInput coroutine below, rather than
+        // the plain `settings` local — `settings` is a fresh object on every recomposition (from
+        // collectAsState), so a closure that captured it directly would only ever see whatever it was
+        // when that coroutine started.
+        val currentSettings by rememberUpdatedState(settings)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                // Tap and drag detection each get their OWN pointerInput modifier (rather than being
+                // launched as two child coroutines inside one shared pointerInput block) because a
+                // freshly (re)started pointerInput block only begins running once the first pointer
+                // event actually arrives — and if that first event is what wakes the block, a detector
+                // launched as a *child* coroutine of that block isn't yet awaiting events by the time
+                // the event is dispatched, so it's lost and the gesture goes unrecognized. Calling
+                // detectTapGestures/detectDragGestures directly as the top-level suspend call of their
+                // own pointerInput block (no nested launch) means the very event that wakes the block
+                // is the same one its own awaitFirstDown sees, so the first tap or swipe after opening
+                // any book is no longer silently swallowed.
+                //
+                // pageTurnMode is still a key on purpose: it picks which drag-detector branch even
+                // runs (2-axis vs. horizontal-only below), a decision made once when the coroutine
+                // starts, so an actual mode change still needs a restart to take effect.
+                .pointerInput(settings.pageTurnMode) {
+                    // While the top/bottom bars are showing, any tap (unless it's actually on a
+                    // button) just closes them, regardless of position — this avoids a page turn
+                    // happening at the same time and causing confusion. The buttons themselves sit
+                    // above this pointerInput in z-order and consume their own clicks first, so
+                    // taps on them never reach here.
+                    detectTapGestures(onTap = { offset ->
+                        if (showChrome) {
+                            showChrome = false
+                            return@detectTapGestures
                         }
-                    },
-            ) {
-                if (settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
-                    ReaderPagerContent(viewModel = viewModel, uiState = uiState, readerColors = readerColors)
-                } else {
-                    ReaderScrollContent(viewModel = viewModel, uiState = uiState, readerColors = readerColors)
+                        val width = size.width
+                        val height = size.height
+                        when {
+                            offset.y < height * 0.3f -> showChrome = true
+                            offset.x < width * 0.5f -> viewModel.performGestureAction(currentSettings.touchLeftAction)
+                            else -> viewModel.performGestureAction(currentSettings.touchRightAction)
+                        }
+                    })
                 }
+                .pointerInput(settings.pageTurnMode) {
+                    val swipeThresholdPx = 40.dp.toPx()
+                    if (settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+                        // Both axes are tracked and only the axis with the larger total movement is
+                        // acted on, so a diagonal drag doesn't ambiguously trigger both a horizontal
+                        // and a vertical action.
+                        var dragTotalX = 0f
+                        var dragTotalY = 0f
+                        detectDragGestures(
+                            onDragStart = { dragTotalX = 0f; dragTotalY = 0f },
+                            onDrag = { change, dragAmount ->
+                                dragTotalX += dragAmount.x
+                                dragTotalY += dragAmount.y
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (abs(dragTotalX) >= abs(dragTotalY)) {
+                                    when {
+                                        dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeLeftAction)
+                                        dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeRightAction)
+                                    }
+                                } else {
+                                    when {
+                                        dragTotalY <= -swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeUpAction)
+                                        dragTotalY >= swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeDownAction)
+                                    }
+                                }
+                            },
+                        )
+                    } else {
+                        // Scroll mode: vertical dragging is already the scroll gesture itself
+                        // (ReaderScrollContent's LazyColumn), so only horizontal swipe is
+                        // available here — swipe up/down actions don't apply in this mode.
+                        var dragTotalX = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { dragTotalX = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                dragTotalX += dragAmount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                when {
+                                    dragTotalX <= -swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeLeftAction)
+                                    dragTotalX >= swipeThresholdPx -> viewModel.performGestureAction(currentSettings.swipeRightAction)
+                                }
+                            },
+                        )
+                    }
+                },
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            } else if (settings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) {
+                ReaderPagerContent(viewModel = viewModel, uiState = uiState, readerColors = readerColors)
+            } else {
+                ReaderScrollContent(viewModel = viewModel, uiState = uiState, readerColors = readerColors)
             }
+        }
 
+        if (!uiState.isLoading) {
             AnimatedVisibility(
                 visible = showChrome,
                 enter = fadeIn(),
@@ -344,15 +363,15 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
     }
 
     if (showQuickSettings) {
-        QuickSettingsSheet(viewModel = viewModel, settings = settings, onDismiss = { showQuickSettings = false })
+        QuickSettingsSheet(viewModel = viewModel, settings = settings, onDismiss = { showQuickSettings = false; showChrome = false })
     }
     if (showToc) {
         TocSheet(
             chapters = uiState.chapters,
             currentOffset = uiState.currentOffset,
             fullTextLength = uiState.fullText.length,
-            onJump = { offset -> viewModel.jumpToOffset(offset); showToc = false },
-            onDismiss = { showToc = false },
+            onJump = { offset -> viewModel.jumpToOffset(offset); showToc = false; showChrome = false },
+            onDismiss = { showToc = false; showChrome = false },
         )
     }
     if (showSearch) {
@@ -362,8 +381,8 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
             initialResults = viewModel.lastSearchResults,
             currentOffset = uiState.currentOffset,
             fullTextLength = uiState.fullText.length,
-            onJump = { offset -> viewModel.jumpToOffset(offset); showSearch = false },
-            onDismiss = { showSearch = false },
+            onJump = { offset -> viewModel.jumpToOffset(offset); showSearch = false; showChrome = false },
+            onDismiss = { showSearch = false; showChrome = false },
         )
     }
     uiState.externalFurtherOffset?.let { externalOffset ->
