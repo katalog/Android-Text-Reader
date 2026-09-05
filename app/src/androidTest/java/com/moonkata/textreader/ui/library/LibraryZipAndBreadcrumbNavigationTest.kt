@@ -150,8 +150,13 @@ class LibraryZipAndBreadcrumbNavigationTest {
         assertEquals("하위폴더", viewModel.uiState.value.path.last().name)
 
         // Press the root breadcrumb (the very first item) to return to the top level in one step.
+        // `path` updates synchronously but `entries` only after the reload coroutine finishes, so
+        // waiting on `path.size` alone races with that reload — wait for the actual entries too.
         composeTestRule.runOnUiThread { viewModel.navigateToBreadcrumb(0) }
-        composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.path.size == 1 }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            viewModel.uiState.value.path.size == 1 &&
+                viewModel.uiState.value.entries.any { it.name == "하위폴더" }
+        }
         assertNotNull(
             "Returning to the root must show the subfolder entry again",
             viewModel.uiState.value.entries.find { it.name == "하위폴더" },
