@@ -7,7 +7,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.moonkata.textreader.data.datastore.ReaderSettings
+import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.navigation.AppNavigation
 import com.moonkata.textreader.ui.theme.TextReaderTheme
 
@@ -19,7 +24,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            TextReaderTheme {
+            val settingsRepository = remember { ReaderSettingsRepository(applicationContext) }
+            val settings by settingsRepository.settingsFlow.collectAsState(initial = ReaderSettings())
+            TextReaderTheme(settings = settings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
