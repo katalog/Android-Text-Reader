@@ -10,8 +10,10 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
@@ -240,4 +242,53 @@ class ReaderTapZoneAndSwipeNavigationTest {
             }
         }
     }
+
+    @Test
+    fun verticalSwipes_inPagedMode_upGoesNext_downGoesPrevious() {
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val db = AppDatabase.getDatabase(application)
+        val bookRepository = BookRepository(application, db.bookDao())
+        val settingsRepository = ReaderSettingsRepository(application)
+        val marker = "SWIPE_VERTICAL_PAGED_MARKER"
+        val originalSettings = runBlocking { settingsRepository.settingsFlow.first() }
+
+        runBlocking {
+            settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
+            settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
+            // Assigned to plain page actions rather than chapter jump — this test is only about
+            // whether a vertical drag is detected and routed to its assigned action at all, which
+            // ChapterJumpNavigationTest doesn't cover (it drives nextChapterJump()/
+            // previousChapterJump() directly, never through the gesture-detection code).
+            settingsRepository.updateSwipeUpAction(PageGestureAction.NEXT_PAGE)
+            settingsRepository.updateSwipeDownAction(PageGestureAction.PREVIOUS_PAGE)
+        }
+        val bookId = setUpBook(application, bookRepository, marker)
+
+        try {
+            composeTestRule.setContent {
+                MaterialTheme { ReaderScreen(bookId = bookId, onBack = {}) }
+            }
+            composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
+            waitForChromeToHide()
+
+            composeTestRule.onRoot().performTouchInput { swipeUp() }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
+
+            composeTestRule.onRoot().performTouchInput { swipeDown() }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { firstMarkerVisible(marker) }
+        } finally {
+            runBlocking {
+                settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
+                settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
+                settingsRepository.updateSwipeUpAction(originalSettings.swipeUpAction)
+                settingsRepository.updateSwipeDownAction(originalSettings.swipeDownAction)
+                db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
+            }
+        }
+    }
+
+    // A "vertical swipe still scrolls the content in VERTICAL_SCROLL mode" test was attempted here
+    // but removed — see .docs/TESTING.md's "의도적으로 제외" for why (Compose UI test's synthetic
+    // swipeUp() never reaches ReaderScrollContent's LazyColumn under this screen's outer pointerInput
+    // Box, though a real touch on a real device scrolls it correctly).
 }

@@ -382,3 +382,16 @@ EUC-KR 픽스처는 없어서 인코딩 감지 테스트는 합성 데이터를 
   같은 이유로 `TtsController`가 `ReaderViewModel` 안에서 직접 만들어져 주입 지점이 없고, 그 위에 실제
   TTS 엔진 타이밍이라는 근본적인 불안정성까지 겹칩니다. `TtsController` 자체의 안전성(준비 전/후 호출,
   shutdown 이후 호출)은 `TtsControllerTest`로 검증돼 있습니다.
+- **VERTICAL_SCROLL 모드에서 세로 스와이프가 실제로 `ReaderScrollContent`의 `LazyColumn`을 스크롤하는지
+  (제스처 경로로)** — `ReaderTapZoneAndSwipeNavigationTest`에 추가했다가 제거했습니다.
+  `composeTestRule.onRoot().performTouchInput { swipeUp() }`을 5초 동안 반복해도(100회 이상)
+  `VerticalScrollAxisRange`가 `value=0.0`에서 전혀 움직이지 않아 매번 타임아웃으로 실패했는데,
+  로그캣으로 확인해보니 `pageTurnMode`는 정확히 `VERTICAL_SCROLL`이었고 `LazyColumn`도 정상 배치돼
+  있었습니다. 같은 빌드를 실기기에 설치해 `adb shell input swipe`로 진짜 터치를 주면 콘텐츠가 정상적으로
+  스크롤됩니다(스크롤 전후 스크린샷으로 확인) — 즉 `ReaderScreen.kt`의 바깥쪽 `pointerInput` Box가
+  세로 제스처를 가로채는 실제 버그가 아니라, Compose UI 테스트의 합성 `swipeUp()`이 이 화면의
+  커스텀 `pointerInput`(터치존 탭 감지 + `detectHorizontalDragGestures`) 아래 중첩된 `LazyColumn`까지
+  제대로 전달되지 않는 테스트 하네스 쪽 한계로 보입니다. 이런 "부모에 커스텀 제스처 감지기가 있고 그
+  안에 스크롤 가능한 리스트가 중첩된" 구조로 제스처 기반 스크롤을 테스트한 전례가 이 저장소에 없어
+  더 파고들 근거(비교할 기존 통과 테스트)도 없었습니다. 가로 스와이프/탭존 제스처(별도의 경쟁하는
+  스크롤 가능 컨테이너가 없는 경우)는 같은 파일의 다른 테스트들로 정상적으로 검증됩니다.
