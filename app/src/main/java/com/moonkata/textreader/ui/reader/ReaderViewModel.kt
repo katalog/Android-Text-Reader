@@ -586,7 +586,7 @@ class ReaderViewModel(
         val text = _uiState.value.fullText
         val results = mutableListOf<SearchResult>()
         var idx = text.indexOf(query, 0, ignoreCase = true)
-        while (idx >= 0 && results.size < 200) {
+        while (idx >= 0) {
             val snippetStart = (idx - 20).coerceAtLeast(0)
             val snippetEnd = (idx + query.length + 20).coerceAtMost(text.length)
             // If a snippet spans a paragraph boundary (blank line), the raw newlines eat up the
