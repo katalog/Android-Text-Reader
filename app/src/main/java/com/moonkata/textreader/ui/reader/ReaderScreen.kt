@@ -350,6 +350,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
         TocSheet(
             chapters = uiState.chapters,
             currentOffset = uiState.currentOffset,
+            fullTextLength = uiState.fullText.length,
             onJump = { offset -> viewModel.jumpToOffset(offset); showToc = false },
             onDismiss = { showToc = false },
         )
@@ -360,6 +361,7 @@ fun ReaderScreen(bookId: Long, onBack: () -> Unit) {
             initialQuery = viewModel.lastSearchQuery,
             initialResults = viewModel.lastSearchResults,
             currentOffset = uiState.currentOffset,
+            fullTextLength = uiState.fullText.length,
             onJump = { offset -> viewModel.jumpToOffset(offset); showSearch = false },
             onDismiss = { showSearch = false },
         )

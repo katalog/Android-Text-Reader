@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -61,6 +63,7 @@ fun SearchSheet(
     initialQuery: String,
     initialResults: List<SearchResult>,
     currentOffset: Int,
+    fullTextLength: Int,
     onJump: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -163,17 +166,27 @@ fun SearchSheet(
                 items(results.size) { index ->
                     val result = results[index]
                     val isNearest = index == nearestIndex
-                    Text(
-                        result.snippet,
-                        fontWeight = if (isNearest) FontWeight.Bold else FontWeight.Normal,
+                    Row(
+                        verticalAlignment = Alignment.Top,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(if (isNearest) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
                             .clickable { onJump(result.offset) }
                             .padding(vertical = 8.dp, horizontal = 4.dp),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    ) {
+                        Text(
+                            result.snippet,
+                            fontWeight = if (isNearest) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            formatPositionPercent(result.offset, fullTextLength),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     HorizontalDivider()
                 }
             }

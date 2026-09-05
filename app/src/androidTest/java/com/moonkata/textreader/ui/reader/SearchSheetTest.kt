@@ -50,6 +50,7 @@ class SearchSheetTest {
                     initialQuery = "",
                     initialResults = emptyList(),
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -80,6 +81,7 @@ class SearchSheetTest {
                     initialQuery = "",
                     initialResults = emptyList(),
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -107,6 +109,7 @@ class SearchSheetTest {
                     initialQuery = "이전검색어",
                     initialResults = canned,
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -131,6 +134,7 @@ class SearchSheetTest {
                     initialQuery = "쿼리",
                     initialResults = results,
                     currentOffset = currentOffset,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -142,6 +146,28 @@ class SearchSheetTest {
     }
 
     @Test
+    fun resultRow_showsItsPositionAsPercentOfTheBook() {
+        val results = listOf(SearchResult(offset = 25_000, snippet = "퍼센트 표시 테스트"))
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                SearchSheet(
+                    onSearch = { results },
+                    initialQuery = "쿼리",
+                    initialResults = results,
+                    currentOffset = 0,
+                    fullTextLength = 100_000,
+                    onJump = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("25%").assertExists()
+    }
+
+    @Test
     fun openingWithNoExistingQuery_cursorStartsAtTheBeginning() {
         composeTestRule.setContent {
             MaterialTheme {
@@ -150,6 +176,7 @@ class SearchSheetTest {
                     initialQuery = "",
                     initialResults = emptyList(),
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -175,6 +202,7 @@ class SearchSheetTest {
                     initialQuery = existingQuery,
                     initialResults = emptyList(),
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )
@@ -200,6 +228,7 @@ class SearchSheetTest {
                     initialQuery = existingQuery,
                     initialResults = emptyList(),
                     currentOffset = 0,
+                    fullTextLength = 100_000,
                     onJump = {},
                     onDismiss = {},
                 )

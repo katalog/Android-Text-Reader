@@ -36,6 +36,7 @@ class TocSheetAutoScrollTest {
                 TocSheet(
                     chapters = chapters,
                     currentOffset = currentOffset,
+                    fullTextLength = 200_000,
                     onJump = { jumpedTo = it },
                     onDismiss = {},
                 )
@@ -53,10 +54,24 @@ class TocSheetAutoScrollTest {
     fun emptyChapterList_showsNoTocMessage() {
         composeTestRule.setContent {
             MaterialTheme {
-                TocSheet(chapters = emptyList(), currentOffset = 0, onJump = {}, onDismiss = {})
+                TocSheet(chapters = emptyList(), currentOffset = 0, fullTextLength = 0, onJump = {}, onDismiss = {})
             }
         }
 
         composeTestRule.onNodeWithText("No table of contents found").assertExists()
+    }
+
+    @Test
+    fun chapterRow_showsItsPositionAsPercentOfTheBook() {
+        val chapters = listOf(Chapter(title = "제1장", charOffset = 50_000))
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                TocSheet(chapters = chapters, currentOffset = 0, fullTextLength = 100_000, onJump = {}, onDismiss = {})
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("50%").assertExists()
     }
 }
