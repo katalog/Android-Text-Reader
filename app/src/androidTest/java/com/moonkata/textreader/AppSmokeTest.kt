@@ -25,8 +25,10 @@ class AppSmokeTest {
         // ExtendedFloatingActionButton does not merge its icon+text into a single merged semantics
         // node, so the default lookup against the merged tree can't find the text inside it — look
         // it up in the unmerged tree instead.
+        val addFolderLabel = composeTestRule.activity.getString(R.string.library_add_folder)
+        val changeFolderLabel = composeTestRule.activity.getString(R.string.library_change_folder)
         composeTestRule
-            .onNode(hasText("Add folder") or hasText("Change folder"), useUnmergedTree = true)
+            .onNode(hasText(addFolderLabel) or hasText(changeFolderLabel), useUnmergedTree = true)
             .assertExists()
     }
 }

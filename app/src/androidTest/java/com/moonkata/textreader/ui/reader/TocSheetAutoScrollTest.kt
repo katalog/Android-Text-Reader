@@ -1,10 +1,13 @@
 package com.moonkata.textreader.ui.reader
 
+import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.model.Chapter
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -21,6 +24,8 @@ class TocSheetAutoScrollTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    private val application = ApplicationProvider.getApplicationContext<Application>()
 
     @Test
     fun openingToc_scrollsToCurrentChapterWithoutManualScroll_andJumpsOnClick() {
@@ -58,7 +63,7 @@ class TocSheetAutoScrollTest {
             }
         }
 
-        composeTestRule.onNodeWithText("No table of contents found").assertExists()
+        composeTestRule.onNodeWithText(application.getString(R.string.toc_empty)).assertExists()
     }
 
     @Test

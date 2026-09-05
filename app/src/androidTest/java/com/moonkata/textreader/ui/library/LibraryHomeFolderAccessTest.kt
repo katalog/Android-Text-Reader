@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.repository.BookRepository
@@ -75,7 +76,7 @@ class LibraryHomeFolderAccessTest {
             waitUntilTrue { viewModel.uiState.value.folderAccessLost }
             assertNull("rootUri must stay null — the saved folder must not be treated as open", viewModel.uiState.value.rootUri)
             composeTestRule.waitForIdle()
-            composeTestRule.onNodeWithText("Can no longer access your home folder. Please choose it again.").assertExists()
+            composeTestRule.onNodeWithText(application.getString(R.string.library_folder_access_lost)).assertExists()
         } finally {
             cleanup()
             testDb.close()

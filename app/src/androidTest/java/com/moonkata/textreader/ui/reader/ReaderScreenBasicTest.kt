@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.file.BookSource
 import com.moonkata.textreader.data.repository.BookRepository
@@ -70,7 +71,7 @@ class ReaderScreenBasicTest {
                 composeTestRule.onAllNodesWithText(testFile.name).fetchSemanticsNodes().isNotEmpty()
             }
 
-            composeTestRule.onNodeWithContentDescription("Back").performClick()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.reader_back_desc)).performClick()
             assertTrue("Pressing the back button should invoke the onBack callback", backCount > 0)
         } finally {
             testFile.delete()

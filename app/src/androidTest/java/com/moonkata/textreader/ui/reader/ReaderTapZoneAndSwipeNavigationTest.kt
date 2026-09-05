@@ -16,6 +16,7 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.datastore.PageTurnMode
@@ -45,6 +46,8 @@ class ReaderTapZoneAndSwipeNavigationTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private val application = ApplicationProvider.getApplicationContext<Application>()
+
     private fun setUpBook(application: Application, bookRepository: BookRepository, firstMarker: String): Long {
         val testFile = File.createTempFile("tap_swipe_nav_test", ".txt", application.cacheDir).apply {
             val body = (1..300).joinToString("\n\n") { "그리고 이야기는 계속 이어졌다 문단 번호 $it 여기서 끝나지 않는다" }
@@ -57,7 +60,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
 
     private fun waitForChromeToHide() {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
         }
     }
 
@@ -137,7 +140,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
             // Both zones are NEXT_PAGE, so the left tap must not return to the first page (the marker must stay hidden).
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             assertFalse(
                 "When both tap zones are NEXT_PAGE, the left tap must also go to the next page, so it must not return to the first page",
@@ -226,7 +229,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
             // Both directions are NEXT_PAGE, so swiping right must also not return to the first page.
             composeTestRule.onRoot().performTouchInput { swipeRight() }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
                 "When both swipe directions are NEXT_PAGE, swiping right must also go to the next page, so it must not return to the first page",
@@ -325,7 +328,7 @@ class ReaderTapZoneAndSwipeNavigationTest {
             // touchLeftAction=NONE -> tapping the left half must not turn the page at all.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             assertFalse(
                 "A tap zone assigned NONE must not turn the page in either direction",

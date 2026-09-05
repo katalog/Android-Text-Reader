@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.repository.BookRepository
@@ -35,13 +36,15 @@ class QuickSettingsSheetGestureActionsTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private fun labelFor(action: PageGestureAction) = mapOf(
-        PageGestureAction.PREVIOUS_PAGE to "Previous page",
-        PageGestureAction.NEXT_PAGE to "Next page",
-        PageGestureAction.PREVIOUS_CHAPTER_JUMP to "Previous chapter jump",
-        PageGestureAction.NEXT_CHAPTER_JUMP to "Next chapter jump",
-        PageGestureAction.NONE to "No action",
-    ).getValue(action)
+    private fun labelFor(application: Application, action: PageGestureAction) = application.getString(
+        when (action) {
+            PageGestureAction.PREVIOUS_PAGE -> R.string.settings_gesture_previous_page
+            PageGestureAction.NEXT_PAGE -> R.string.settings_gesture_next_page
+            PageGestureAction.PREVIOUS_CHAPTER_JUMP -> R.string.settings_gesture_previous_chapter_jump
+            PageGestureAction.NEXT_CHAPTER_JUMP -> R.string.settings_gesture_next_chapter_jump
+            PageGestureAction.NONE -> R.string.settings_gesture_none
+        },
+    )
 
     @Test
     fun pickingAnOptionFromTheDropdown_updatesUiAndPersistsToDataStore() {
@@ -73,10 +76,10 @@ class QuickSettingsSheetGestureActionsTest {
             // The touch-left row is declared first among the six gesture rows, so if its current
             // action's label happens to match another row's too, it's still the first match in
             // document order.
-            val currentLabel = labelFor(originalSettings.touchLeftAction)
+            val currentLabel = labelFor(application, originalSettings.touchLeftAction)
             composeTestRule.onAllNodesWithText(currentLabel)[0].performScrollTo().performClick()
 
-            composeTestRule.onNodeWithText(labelFor(target)).performClick()
+            composeTestRule.onNodeWithText(labelFor(application, target)).performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.touchLeftAction == target }
 

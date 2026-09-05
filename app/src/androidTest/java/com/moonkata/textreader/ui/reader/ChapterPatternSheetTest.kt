@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.repository.BookRepository
 import com.moonkata.textreader.testutil.TestBooks
@@ -106,7 +107,7 @@ class ChapterPatternSheetTest {
 
             val pattern = """^Vol\.\s*\d+"""
             composeTestRule.onNode(hasSetTextAction()).performTextInput(pattern)
-            composeTestRule.onNodeWithContentDescription("Add").performClick()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.chapter_pattern_add_desc)).performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) { pattern in viewModel.uiState.value.settings.chapterCustomPatterns }
             // Whether the input field was actually cleared — the added pattern shows up separately in the list, so read the input field's own text value directly.
@@ -149,10 +150,10 @@ class ChapterPatternSheetTest {
 
             val invalidPattern = "(["  // an unclosed character class/group — not a valid regex
             composeTestRule.onNode(hasSetTextAction()).performTextInput(invalidPattern)
-            composeTestRule.onNodeWithContentDescription("Add").performClick()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.chapter_pattern_add_desc)).performClick()
             composeTestRule.waitForIdle()
 
-            composeTestRule.onNodeWithText("That's not a valid regular expression").assertExists()
+            composeTestRule.onNodeWithText(application.getString(R.string.chapter_pattern_invalid_regex)).assertExists()
             assertTrue(
                 "An invalid regex must not be persisted",
                 runBlocking { viewModel.settingsRepository.settingsFlow.first() }.chapterCustomPatterns.isEmpty(),
@@ -192,7 +193,7 @@ class ChapterPatternSheetTest {
             composeTestRule.waitForIdle()
 
             composeTestRule.onNodeWithText(existingPattern).assertExists()
-            composeTestRule.onNodeWithContentDescription("Delete").performClick()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.chapter_pattern_delete_desc)).performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 existingPattern !in viewModel.uiState.value.settings.chapterCustomPatterns

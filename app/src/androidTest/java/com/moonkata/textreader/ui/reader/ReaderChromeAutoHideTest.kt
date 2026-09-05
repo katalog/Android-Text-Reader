@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
@@ -76,20 +77,20 @@ class ReaderChromeAutoHideTest {
                 composeTestRule.onAllNodesWithText(firstParagraphMarker, substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
 
             // 2. Tap the top 30% -> the bars must reappear.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.5f, height * 0.1f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isNotEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isNotEmpty()
             }
 
             // 3. From there, tap the viewer area (below the top 30%) -> only the bars should
             //    disappear, and the page must not turn.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.75f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
                 "The tap that closes the bars must not turn the page, so the first paragraph should still be on screen",

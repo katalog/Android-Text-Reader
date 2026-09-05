@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.AutoAdvanceMode
 import com.moonkata.textreader.data.datastore.PageTurnMode
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
@@ -78,20 +79,20 @@ class ReaderTopBarTwoRowsTest {
                 composeTestRule.onAllNodesWithText(firstParagraphMarker, substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.5f, height * 0.1f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isNotEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isNotEmpty()
             }
 
             // Row 1: back + settings
-            composeTestRule.onNodeWithContentDescription("Back").assertExists()
-            composeTestRule.onNodeWithContentDescription("Settings").assertExists()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.reader_back_desc)).assertExists()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.reader_settings_desc)).assertExists()
 
             // Row 2: TOC + search
-            composeTestRule.onNodeWithContentDescription("Table of contents").assertExists()
-            composeTestRule.onNodeWithContentDescription("Search").assertExists()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.reader_toc_desc)).assertExists()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.reader_search_desc)).assertExists()
 
             // Since the bottom bar has been fully removed, no text containing "%" should exist
             // anywhere while chrome is visible right now (the corner percent indicator only appears
@@ -105,7 +106,7 @@ class ReaderTopBarTwoRowsTest {
             // should only appear now.
             composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.75f, height * 0.6f)) }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+                composeTestRule.onAllNodesWithContentDescription(application.getString(R.string.reader_back_desc)).fetchSemanticsNodes().isEmpty()
             }
             assertTrue(
                 "The small percent indicator in the corner should remain while chrome is hidden (separate UI unrelated to the removed bottom bar)",

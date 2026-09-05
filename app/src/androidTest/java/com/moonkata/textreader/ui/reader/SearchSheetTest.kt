@@ -1,5 +1,6 @@
 package com.moonkata.textreader.ui.reader
 
+import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -13,7 +14,9 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextRange
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.model.SearchResult
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -38,6 +41,9 @@ class SearchSheetTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private val application = ApplicationProvider.getApplicationContext<Application>()
+    private val searchTextLabel get() = application.getString(R.string.search_field_label)
+
     @Test
     fun typingAlone_doesNotSearch_onlySearchButtonDoes() {
         var searchCallCount = 0
@@ -58,11 +64,11 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Search text").performTextInput("테스트")
+        composeTestRule.onNodeWithText(searchTextLabel).performTextInput("테스트")
         composeTestRule.waitForIdle()
         assertEquals("Typing alone must not trigger a search", 0, searchCallCount)
 
-        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithContentDescription(application.getString(R.string.search_desc)).performClick()
         composeTestRule.waitForIdle()
 
         assertEquals("Tapping the search button should trigger exactly one search", 1, searchCallCount)
@@ -89,8 +95,8 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Search text").performTextInput("테스트")
-        composeTestRule.onNodeWithText("Search text").performImeAction()
+        composeTestRule.onNodeWithText(searchTextLabel).performTextInput("테스트")
+        composeTestRule.onNodeWithText(searchTextLabel).performImeAction()
         composeTestRule.waitForIdle()
 
         assertEquals(1, searchCallCount)
@@ -184,7 +190,7 @@ class SearchSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        val selection = composeTestRule.onNodeWithText("Search text")
+        val selection = composeTestRule.onNodeWithText(searchTextLabel)
             .fetchSemanticsNode()
             .config[SemanticsProperties.TextSelectionRange]
 

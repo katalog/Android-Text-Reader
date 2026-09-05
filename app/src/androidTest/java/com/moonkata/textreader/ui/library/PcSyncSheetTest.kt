@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettings
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.data.db.AppDatabase
@@ -84,7 +85,7 @@ class PcSyncSheetTest {
     // "Sync now" appears twice in the sheet, identically, as both a section title and a button
     // label (PcSyncSheet.kt), so a plain onNodeWithText matches both nodes — narrow down to just
     // the clickable one (the button).
-    private fun syncButton() = composeTestRule.onNode(hasText("Sync now").and(hasClickAction()))
+    private fun syncButton() = composeTestRule.onNode(hasText(application.getString(R.string.pc_sync_now)).and(hasClickAction()))
 
     @Test
     fun unverifiedConnection_disablesSyncButton_andShowsHint() {
@@ -99,7 +100,7 @@ class PcSyncSheetTest {
         composeTestRule.waitForIdle()
 
         syncButton().performScrollTo().assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Pass the connection test first to sync.").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_test_first)).performScrollTo().assertExists()
     }
 
     @Test
@@ -115,7 +116,7 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Connected").assertExists()
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_connected)).assertExists()
         syncButton().performScrollTo().assertIsEnabled()
     }
 
@@ -130,10 +131,11 @@ class PcSyncSheetTest {
             MaterialTheme { PcSyncSheet(viewModel = viewModel, settings = settings, onDismiss = {}) }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Connected").assertExists()
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_connected)).assertExists()
 
-        composeTestRule.onNodeWithText("Shared secret").performTextClearance()
-        composeTestRule.onNodeWithText("Shared secret").performTextInput("different-secret")
+        val sharedSecretLabel = application.getString(R.string.pc_sync_shared_secret)
+        composeTestRule.onNodeWithText(sharedSecretLabel).performTextClearance()
+        composeTestRule.onNodeWithText(sharedSecretLabel).performTextInput("different-secret")
         composeTestRule.waitForIdle()
 
         syncButton().performScrollTo().assertIsNotEnabled()
@@ -154,16 +156,20 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("PC address (computer name or IP)").performTextInput("192.0.2.1")
-        composeTestRule.onNodeWithText("Shared secret").performTextInput("whatever")
-        composeTestRule.onNodeWithText("Test connection").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_host_label)).performTextInput("192.0.2.1")
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_shared_secret)).performTextInput("whatever")
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_test_connection)).performScrollTo().performClick()
 
         // The failure message was changed to append the actual cause (exception type/message)
         // verbatim (added after a real-world bug where the cause was hard to track down, see
-        // .docs/SYNC_MULTIUSER_PLAN.md), so instead of a fixed phrase, only the "Connection failed —"
-        // prefix is checked here — the exact exception message can vary by platform/timing.
+        // .docs/SYNC_MULTIUSER_PLAN.md), so instead of a fixed phrase, only the static prefix before
+        // the "%1$s" placeholder is checked here — the exact exception message can vary by
+        // platform/timing. Filling the placeholder with a dummy marker and cutting at it recovers
+        // just that localized prefix regardless of device language.
+        val uniqueMarker = "PC_SYNC_FAILURE_MARKER"
+        val failurePrefix = application.getString(R.string.pc_sync_connection_failed, uniqueMarker).substringBefore(uniqueMarker)
         composeTestRule.waitUntil(timeoutMillis = 8_000) {
-            composeTestRule.onAllNodesWithText("Connection failed —", substring = true)
+            composeTestRule.onAllNodesWithText(failurePrefix, substring = true)
                 .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
         syncButton().performScrollTo().assertIsNotEnabled()
@@ -182,9 +188,9 @@ class PcSyncSheetTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("PC address (computer name or IP)").performTextInput("draft-host")
-        composeTestRule.onNodeWithText("Shared secret").performTextInput("draft-secret")
-        composeTestRule.onNodeWithText("Close").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_host_label)).performTextInput("draft-host")
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_shared_secret)).performTextInput("draft-secret")
+        composeTestRule.onNodeWithText(application.getString(R.string.pc_sync_close)).performScrollTo().performClick()
 
         assertTrue("onDismiss must be invoked when Close is pressed", dismissed)
         // updatePcSyncConnectionDraft commits via viewModelScope.launch, so it isn't synchronized

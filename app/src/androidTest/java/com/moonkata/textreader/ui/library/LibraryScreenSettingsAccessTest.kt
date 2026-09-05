@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.ReaderSettingsRepository
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.file.BookSource
@@ -83,11 +84,16 @@ class LibraryScreenSettingsAccessTest {
             composeTestRule.waitForIdle()
 
             // Still no book open — the settings icon is there and pressing it brings up the sheet.
-            composeTestRule.onNodeWithContentDescription("Settings").performClick()
+            composeTestRule.onNodeWithContentDescription(application.getString(R.string.library_settings_desc)).performClick()
             composeTestRule.waitForIdle()
-            composeTestRule.onNodeWithText("Font").assertExists()
+            composeTestRule.onNodeWithText(application.getString(R.string.settings_section_font)).assertExists()
 
-            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "Increase Size" else "Decrease Size"
+            val fontSizeLabel = application.getString(R.string.settings_font_size)
+            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) {
+                application.getString(R.string.settings_stepper_increase_desc, fontSizeLabel)
+            } else {
+                application.getString(R.string.settings_stepper_decrease_desc, fontSizeLabel)
+            }
             composeTestRule.onNodeWithContentDescription(fontSizeButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.fontSizeSp == targetFontSize }
 

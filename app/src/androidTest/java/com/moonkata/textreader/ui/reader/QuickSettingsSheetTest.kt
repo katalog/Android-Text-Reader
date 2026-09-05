@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.PageTransitionAnimation
 import com.moonkata.textreader.data.datastore.ThemePreset
 import com.moonkata.textreader.data.db.AppDatabase
@@ -60,16 +61,21 @@ class QuickSettingsSheetTest {
             PageTransitionAnimation.SLIDE -> PageTransitionAnimation.COVER
             PageTransitionAnimation.COVER -> PageTransitionAnimation.NONE
         }
-        val themeLabel = mapOf(
-            ThemePreset.LIGHT to "Light",
-            ThemePreset.DARK to "Dark",
-            ThemePreset.SEPIA to "Sepia",
-        ).getValue(targetTheme)
-        val transitionLabel = mapOf(
-            PageTransitionAnimation.NONE to "None",
-            PageTransitionAnimation.SLIDE to "Slide",
-            PageTransitionAnimation.COVER to "Cover",
-        ).getValue(targetTransition)
+        val themeLabel = application.getString(
+            when (targetTheme) {
+                ThemePreset.LIGHT -> R.string.settings_theme_light
+                ThemePreset.DARK -> R.string.settings_theme_dark
+                ThemePreset.SEPIA -> R.string.settings_theme_sepia
+                ThemePreset.CUSTOM -> R.string.settings_theme_light
+            },
+        )
+        val transitionLabel = application.getString(
+            when (targetTransition) {
+                PageTransitionAnimation.NONE -> R.string.settings_transition_none
+                PageTransitionAnimation.SLIDE -> R.string.settings_transition_slide
+                PageTransitionAnimation.COVER -> R.string.settings_transition_cover
+            },
+        )
 
         try {
             waitUntilTrue { viewModel.uiState.value.settings.fontSizeSp == originalSettings.fontSizeSp }
@@ -82,11 +88,21 @@ class QuickSettingsSheetTest {
             }
             composeTestRule.waitForIdle()
 
-            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) "Increase Size" else "Decrease Size"
+            val fontSizeLabel = application.getString(R.string.settings_font_size)
+            val fontSizeButtonDescription = if (targetFontSize > originalSettings.fontSizeSp) {
+                application.getString(R.string.settings_stepper_increase_desc, fontSizeLabel)
+            } else {
+                application.getString(R.string.settings_stepper_decrease_desc, fontSizeLabel)
+            }
             composeTestRule.onNodeWithContentDescription(fontSizeButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.fontSizeSp == targetFontSize }
 
-            val marginButtonDescription = if (targetMargin > originalSettings.marginHorizontalDp) "Increase Left/right" else "Decrease Left/right"
+            val marginLabel = application.getString(R.string.settings_margin_horizontal)
+            val marginButtonDescription = if (targetMargin > originalSettings.marginHorizontalDp) {
+                application.getString(R.string.settings_stepper_increase_desc, marginLabel)
+            } else {
+                application.getString(R.string.settings_stepper_decrease_desc, marginLabel)
+            }
             composeTestRule.onNodeWithContentDescription(marginButtonDescription).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.marginHorizontalDp == targetMargin }
 

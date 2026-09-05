@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.LineBreakMode
 import com.moonkata.textreader.data.datastore.OrientationLock
 import com.moonkata.textreader.data.datastore.PageTurnMode
@@ -49,20 +50,26 @@ class QuickSettingsSheetModeTogglesTest {
         val originalSettings = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
 
         val targetPageTurnMode = if (originalSettings.pageTurnMode == PageTurnMode.HORIZONTAL_PAGE) PageTurnMode.VERTICAL_SCROLL else PageTurnMode.HORIZONTAL_PAGE
-        val pageTurnLabel = if (targetPageTurnMode == PageTurnMode.HORIZONTAL_PAGE) "Page turn" else "Scroll"
+        val pageTurnLabel = application.getString(
+            if (targetPageTurnMode == PageTurnMode.HORIZONTAL_PAGE) R.string.settings_page_turn_paged else R.string.settings_page_turn_scroll,
+        )
         val targetLineBreakMode = if (originalSettings.lineBreakMode == LineBreakMode.PRESERVE) LineBreakMode.REFLOW else LineBreakMode.PRESERVE
-        val lineBreakLabel = if (targetLineBreakMode == LineBreakMode.PRESERVE) "Keep original" else "Reflow into paragraphs"
+        val lineBreakLabel = application.getString(
+            if (targetLineBreakMode == LineBreakMode.PRESERVE) R.string.settings_line_break_preserve else R.string.settings_line_break_reflow,
+        )
         val targetKeepScreenOn = !originalSettings.keepScreenOnEnabled
         val targetOrientationLock = when (originalSettings.orientationLock) {
             OrientationLock.AUTO -> OrientationLock.PORTRAIT
             OrientationLock.PORTRAIT -> OrientationLock.LANDSCAPE
             OrientationLock.LANDSCAPE -> OrientationLock.AUTO
         }
-        val orientationLabel = mapOf(
-            OrientationLock.AUTO to "Auto",
-            OrientationLock.PORTRAIT to "Portrait",
-            OrientationLock.LANDSCAPE to "Landscape",
-        ).getValue(targetOrientationLock)
+        val orientationLabel = application.getString(
+            when (targetOrientationLock) {
+                OrientationLock.AUTO -> R.string.settings_orientation_auto
+                OrientationLock.PORTRAIT -> R.string.settings_orientation_portrait
+                OrientationLock.LANDSCAPE -> R.string.settings_orientation_landscape
+            },
+        )
 
         try {
             waitUntilTrue { viewModel.uiState.value.paragraphs.isNotEmpty() }
@@ -81,7 +88,7 @@ class QuickSettingsSheetModeTogglesTest {
             composeTestRule.onNodeWithText(lineBreakLabel).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.lineBreakMode == targetLineBreakMode }
 
-            composeTestRule.onNodeWithText("Keep screen on").performScrollTo().performClick()
+            composeTestRule.onNodeWithText(application.getString(R.string.settings_keep_screen_on)).performScrollTo().performClick()
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.keepScreenOnEnabled == targetKeepScreenOn }
 
             composeTestRule.onNodeWithText(orientationLabel).performScrollTo().performClick()
