@@ -14,7 +14,7 @@ enum class AutoAdvanceMode { OFF, TIMER, TTS }
  * (touch left/right, swipe left/right/up/down) is assigned one of these independently, so e.g.
  * swiping up can jump chapters while a left tap still turns the page normally.
  */
-enum class PageGestureAction { PREVIOUS_PAGE, NEXT_PAGE, PREVIOUS_CHAPTER_JUMP, NEXT_CHAPTER_JUMP }
+enum class PageGestureAction { PREVIOUS_PAGE, NEXT_PAGE, PREVIOUS_CHAPTER_JUMP, NEXT_CHAPTER_JUMP, NONE }
 
 /** Transition effect when turning a page. NONE: instant switch, SLIDE: both pages slide together, COVER: the new page slides over the top. */
 enum class PageTransitionAnimation { NONE, SLIDE, COVER }

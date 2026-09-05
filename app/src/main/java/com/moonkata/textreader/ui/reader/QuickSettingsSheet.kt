@@ -1,6 +1,7 @@
 package com.moonkata.textreader.ui.reader
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,15 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -353,24 +356,39 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     }
 }
 
-/** One page-turn gesture (a touch zone or swipe direction) and its 4-way action picker. */
+private fun gestureActionLabelRes(action: PageGestureAction): Int = when (action) {
+    PageGestureAction.PREVIOUS_PAGE -> R.string.settings_gesture_previous_page
+    PageGestureAction.NEXT_PAGE -> R.string.settings_gesture_next_page
+    PageGestureAction.PREVIOUS_CHAPTER_JUMP -> R.string.settings_gesture_previous_chapter_jump
+    PageGestureAction.NEXT_CHAPTER_JUMP -> R.string.settings_gesture_next_chapter_jump
+    PageGestureAction.NONE -> R.string.settings_gesture_none
+}
+
+/**
+ * One page-turn gesture (a touch zone or swipe direction) and its 5-way action picker. A button
+ * showing the current choice opens a dropdown menu to change it — replaced a row of always-visible
+ * chips, which didn't all fit most phone widths at once and needed horizontal scrolling to see the
+ * rest. Reuses the same button+DropdownMenu shape as the library screen's sort-option picker
+ * (LibraryScreen.kt's `showSortMenu`).
+ */
 @Composable
 private fun GestureActionRow(label: String, selected: PageGestureAction, onSelect: (PageGestureAction) -> Unit) {
-    Text(label, style = MaterialTheme.typography.bodyMedium)
-    // 4 chips don't all fit most phone widths at once — scrollable rather than wrapping, matching
-    // every other chip row on this sheet (Theme, page-turn mode, etc.) which are all single-line Rows.
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(
-            PageGestureAction.PREVIOUS_PAGE to R.string.settings_gesture_previous_page,
-            PageGestureAction.NEXT_PAGE to R.string.settings_gesture_next_page,
-            PageGestureAction.PREVIOUS_CHAPTER_JUMP to R.string.settings_gesture_previous_chapter_jump,
-            PageGestureAction.NEXT_CHAPTER_JUMP to R.string.settings_gesture_next_chapter_jump,
-        ).forEach { (action, labelRes) ->
-            FilterChip(
-                selected = selected == action,
-                onClick = { onSelect(action) },
-                label = { Text(stringResource(labelRes)) },
-            )
+    var expanded by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Box {
+            OutlinedButton(onClick = { expanded = true }) {
+                Text(stringResource(gestureActionLabelRes(selected)))
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                PageGestureAction.entries.forEach { action ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(gestureActionLabelRes(action))) },
+                        onClick = { onSelect(action); expanded = false },
+                    )
+                }
+            }
         }
     }
 }

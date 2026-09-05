@@ -80,6 +80,7 @@
     <string name="settings_gesture_next_page">다음 페이지</string>
     <string name="settings_gesture_previous_chapter_jump">이전 챕터점프</string>
     <string name="settings_gesture_next_chapter_jump">다음 챕터점프</string>
+    <string name="settings_gesture_none">동작 없음</string>
     <string name="settings_section_line_break">줄바꿈</string>
     <string name="settings_line_break_preserve">원문 유지</string>
     <string name="settings_line_break_reflow">문단 재구성</string>

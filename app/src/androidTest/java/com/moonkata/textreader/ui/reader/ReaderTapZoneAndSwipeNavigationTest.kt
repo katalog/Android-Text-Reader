@@ -291,4 +291,54 @@ class ReaderTapZoneAndSwipeNavigationTest {
     // but removed — see .docs/TESTING.md's "의도적으로 제외" for why (Compose UI test's synthetic
     // swipeUp() never reaches ReaderScrollContent's LazyColumn under this screen's outer pointerInput
     // Box, though a real touch on a real device scrolls it correctly).
+
+    @Test
+    fun tapZone_setToNoAction_doesNothing() {
+        val application = ApplicationProvider.getApplicationContext<Application>()
+        val db = AppDatabase.getDatabase(application)
+        val bookRepository = BookRepository(application, db.bookDao())
+        val settingsRepository = ReaderSettingsRepository(application)
+        val marker = "TAP_NONE_MARKER"
+        val originalSettings = runBlocking { settingsRepository.settingsFlow.first() }
+
+        runBlocking {
+            settingsRepository.updatePageTurnMode(PageTurnMode.HORIZONTAL_PAGE)
+            settingsRepository.updateAutoAdvanceMode(AutoAdvanceMode.OFF)
+            settingsRepository.updateTouchRightAction(PageGestureAction.NEXT_PAGE)
+            settingsRepository.updateTouchLeftAction(PageGestureAction.NONE)
+        }
+        val bookId = setUpBook(application, bookRepository, marker)
+
+        try {
+            composeTestRule.setContent {
+                MaterialTheme { ReaderScreen(bookId = bookId, onBack = {}) }
+            }
+            composeTestRule.waitUntil(timeoutMillis = 10_000) { firstMarkerVisible(marker) }
+            waitForChromeToHide()
+
+            // Move off the first page first via the right zone (assigned NEXT_PAGE), so a left tap
+            // that (wrongly) still turned the page backward would be observable as the marker
+            // reappearing.
+            composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.8f, height * 0.6f)) }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { !firstMarkerVisible(marker) }
+
+            // touchLeftAction=NONE -> tapping the left half must not turn the page at all.
+            composeTestRule.onRoot().performTouchInput { click(Offset(width * 0.2f, height * 0.6f)) }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                composeTestRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty()
+            }
+            assertFalse(
+                "A tap zone assigned NONE must not turn the page in either direction",
+                firstMarkerVisible(marker),
+            )
+        } finally {
+            runBlocking {
+                settingsRepository.updatePageTurnMode(originalSettings.pageTurnMode)
+                settingsRepository.updateAutoAdvanceMode(originalSettings.autoAdvanceMode)
+                settingsRepository.updateTouchRightAction(originalSettings.touchRightAction)
+                settingsRepository.updateTouchLeftAction(originalSettings.touchLeftAction)
+                db.bookDao().getById(bookId).first()?.let { bookRepository.deleteBook(it) }
+            }
+        }
+    }
 }

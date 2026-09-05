@@ -4,14 +4,13 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.moonkata.textreader.R
 import com.moonkata.textreader.data.datastore.PageGestureAction
 import com.moonkata.textreader.data.db.AppDatabase
 import com.moonkata.textreader.data.repository.BookRepository
@@ -26,11 +25,8 @@ import org.junit.runner.RunWith
 
 /**
  * Covers the "Page-turn options" section's six independent gesture-action pickers
- * (`GestureActionRow`), added when the old two-value `TouchTurnMode`/`SwipeTurnMode` were replaced
- * by one `PageGestureAction` choice per gesture. All six rows render the same four chip labels, so
- * `onAllNodesWithText` returns one match per row in the same top-to-bottom order they're laid out
- * in `QuickSettingsSheet` (touch left, touch right, swipe left, swipe right, swipe up, swipe down)
- * — this test only exercises the first row (touch left) as a representative sample; the repository
+ * (`GestureActionRow`): a button showing the current choice opens a `DropdownMenu` to change it.
+ * This test only exercises the first row (touch left) as a representative sample; the repository
  * round trip for all six is separately covered by `ReaderSettingsRepositoryTest`.
  */
 @RunWith(AndroidJUnit4::class)
@@ -39,8 +35,16 @@ class QuickSettingsSheetGestureActionsTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private fun labelFor(action: PageGestureAction) = mapOf(
+        PageGestureAction.PREVIOUS_PAGE to "Previous page",
+        PageGestureAction.NEXT_PAGE to "Next page",
+        PageGestureAction.PREVIOUS_CHAPTER_JUMP to "Previous chapter jump",
+        PageGestureAction.NEXT_CHAPTER_JUMP to "Next chapter jump",
+        PageGestureAction.NONE to "No action",
+    ).getValue(action)
+
     @Test
-    fun clickingAChip_inTheFirstGestureRow_updatesUiAndPersistsToDataStore() {
+    fun pickingAnOptionFromTheDropdown_updatesUiAndPersistsToDataStore() {
         val bookAsset = "Heuk.txt"
         TestBooks.assumeAvailable(bookAsset)
         val application = ApplicationProvider.getApplicationContext<Application>()
@@ -50,13 +54,10 @@ class QuickSettingsSheetGestureActionsTest {
 
         val viewModel = ReaderViewModel(application, bookId, bookRepository)
         val originalSettings = runBlocking { viewModel.settingsRepository.settingsFlow.first() }
-        val target = PageGestureAction.entries.first { it != originalSettings.touchLeftAction }
-        val targetLabel = mapOf(
-            PageGestureAction.PREVIOUS_PAGE to "Previous page",
-            PageGestureAction.NEXT_PAGE to "Next page",
-            PageGestureAction.PREVIOUS_CHAPTER_JUMP to "Previous chapter jump",
-            PageGestureAction.NEXT_CHAPTER_JUMP to "Next chapter jump",
-        ).getValue(target)
+        // NONE is never any gesture's default, so once the dropdown is open, "No action" can only
+        // match the dropdown item itself — no other row's closed button shows that label to collide
+        // with, unlike picking among PREVIOUS_PAGE/NEXT_PAGE/etc. which several rows default to.
+        val target = PageGestureAction.NONE
 
         try {
             waitUntilTrue { viewModel.uiState.value.settings.touchLeftAction == originalSettings.touchLeftAction }
@@ -69,23 +70,13 @@ class QuickSettingsSheetGestureActionsTest {
             }
             composeTestRule.waitForIdle()
 
-            // Scrolls to the row's own label first (it lives directly in the sheet's outer
-            // vertically-scrollable Column) so the row is actually in the viewport before touching
-            // its chips, which sit in their own nested horizontally-scrollable Row.
-            composeTestRule.onNodeWithText(application.getString(R.string.settings_touch_left)).performScrollTo()
+            // The touch-left row is declared first among the six gesture rows, so if its current
+            // action's label happens to match another row's too, it's still the first match in
+            // document order.
+            val currentLabel = labelFor(originalSettings.touchLeftAction)
+            composeTestRule.onAllNodesWithText(currentLabel)[0].performScrollTo().performClick()
 
-            // Row order in QuickSettingsSheet is touch-left, touch-right, swipe-left, swipe-right,
-            // swipe-up, swipe-down — index 0 is touch-left's chip for this label.
-            val chipNode = composeTestRule.onAllNodesWithText(targetLabel)[0].performScrollTo()
-
-            // Invokes the chip's OnClick semantics action directly rather than performClick(): a
-            // FilterChip nested two scrollables deep (outer sheet Column, inner gesture-row Row)
-            // inside a ModalBottomSheet's own Popup window reports boundsInRoot as all-zero here
-            // (confirmed by direct inspection), and performClick() relies on those bounds to
-            // resolve which node to click — so it silently no-ops instead of toggling the chip.
-            // Invoking the action straight off the already-fetched SemanticsNode sidesteps that
-            // resolution entirely and reaches the real onSelect callback.
-            chipNode.fetchSemanticsNode().config[SemanticsActions.OnClick].action?.invoke()
+            composeTestRule.onNodeWithText(labelFor(target)).performClick()
 
             composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.settings.touchLeftAction == target }
 

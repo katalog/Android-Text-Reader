@@ -80,6 +80,7 @@
     <string name="settings_gesture_next_page">Next page</string>
     <string name="settings_gesture_previous_chapter_jump">Previous chapter jump</string>
     <string name="settings_gesture_next_chapter_jump">Next chapter jump</string>
+    <string name="settings_gesture_none">No action</string>
     <string name="settings_section_line_break">Line breaks</string>
     <string name="settings_line_break_preserve">Keep original</string>
     <string name="settings_line_break_reflow">Reflow into paragraphs</string>

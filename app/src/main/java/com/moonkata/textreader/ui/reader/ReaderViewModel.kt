@@ -501,6 +501,7 @@ class ReaderViewModel(
             PageGestureAction.NEXT_PAGE -> nextPage()
             PageGestureAction.PREVIOUS_CHAPTER_JUMP -> previousChapterJump()
             PageGestureAction.NEXT_CHAPTER_JUMP -> nextChapterJump()
+            PageGestureAction.NONE -> {}
         }
     }
 
