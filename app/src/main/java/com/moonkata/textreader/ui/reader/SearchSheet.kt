@@ -3,30 +3,29 @@ package com.moonkata.textreader.ui.reader
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -56,7 +54,14 @@ import kotlin.math.abs
 /** When the results list opens, scroll up by this many items so the result nearest the current reading position is already visible near the top. */
 private const val CONTEXT_RESULTS_ABOVE = 2
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * A full-screen search "screen" (not a nav destination — just a full-size composable drawn as a
+ * sibling over ReaderScreen's main content, the same way the bottom sheets it replaced were) rather
+ * than a ModalBottomSheet. A sheet with an auto-focused text field fought with the keyboard's own
+ * slide-up animation and needed a two-step back-press ("first press closes the keyboard, second
+ * closes the sheet") to feel right; full-screen collapses that to one back press, since the focused
+ * field simply leaves composition along with everything else.
+ */
 @Composable
 fun SearchSheet(
     onSearch: (String) -> List<SearchResult>,
@@ -72,83 +77,59 @@ fun SearchSheet(
     // (an empty string's end is naturally its start, so this is a no-op when there's no query yet).
     var query by remember { mutableStateOf(TextFieldValue(text = initialQuery, selection = TextRange(initialQuery.length))) }
     var results by remember { mutableStateOf(initialResults) }
-    var fieldFocused by remember { mutableStateOf(false) }
-    val dummyFocusRequester = remember { FocusRequester() }
     val textFieldFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
-    ) {
-        // LocalSoftwareKeyboardController must be read inside this sheet (a separate sub-composition)
-        // to actually act on the text field that currently holds focus — reading it outside the
-        // ModalBottomSheet has no effect.
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
-        // When the sheet is dismissed by swiping down or tapping outside rather than the back button,
-        // a focused text field can disappear from the composition with no cleanup — that leaves the
-        // IME (and the bottom padding it causes) open, permanently obscuring that much of the body in
-        // page mode. Force-clear focus whenever the sheet leaves by any path so the IME always gets
-        // cleaned up.
-        DisposableEffect(Unit) {
-            onDispose { focusManager.clearFocus(force = true) }
-        }
+    // If this screen leaves composition by a path other than the back handler below (shouldn't
+    // normally happen, but cheap insurance), make sure a focused field doesn't leave the IME
+    // dangling open behind whatever comes back into view.
+    DisposableEffect(Unit) {
+        onDispose { focusManager.clearFocus(force = true) }
+    }
 
-        // Turn off the sheet's own back-press handling (shouldDismissOnBackPress = false) so we
-        // handle back ourselves — while the keyboard is up, this back press only closes the keyboard;
-        // the next one closes the sheet (same behavior as a "done" button).
-        BackHandler {
-            if (fieldFocused) {
-                keyboardController?.hide()
-                // clearFocus() alone has nothing to hand focus off to, so the system immediately
-                // returns focus to the same field — move focus to an invisible dummy target instead
-                // to prevent that.
-                dummyFocusRequester.requestFocus()
-            } else {
-                onDismiss()
+    // A single back press always just exits this screen — no keyboard-then-screen two-step needed,
+    // since the focused text field disappears along with everything else and the IME closes as a
+    // natural side effect.
+    BackHandler(onBack = onDismiss)
+
+    fun runSearch() {
+        results = onSearch(query.text)
+        keyboardController?.hide()
+    }
+
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.reader_back_desc))
+                }
+                OutlinedTextField(
+                    value = query,
+                    // Doesn't search on every keystroke — only runs once typing is done and the user
+                    // presses the search button (or the keyboard's search action), so results don't
+                    // keep changing mid-typing.
+                    onValueChange = { query = it },
+                    label = { Text(stringResource(R.string.search_field_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+                    trailingIcon = {
+                        IconButton(onClick = { runSearch() }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search_desc))
+                        }
+                    },
+                    modifier = Modifier.weight(1f).focusRequester(textFieldFocusRequester),
+                )
             }
-        }
-
-        fun runSearch() {
-            results = onSearch(query.text)
-            keyboardController?.hide()
-        }
-
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Spacer(
-                Modifier
-                    .size(1.dp)
-                    .focusRequester(dummyFocusRequester)
-                    .focusable(),
-            )
-            OutlinedTextField(
-                value = query,
-                // Doesn't search on every keystroke — only runs once typing is done and the user
-                // presses the search button (or the keyboard's search action), so results don't
-                // keep changing mid-typing.
-                onValueChange = { query = it },
-                label = { Text(stringResource(R.string.search_field_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-                trailingIcon = {
-                    IconButton(onClick = { runSearch() }) {
-                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search_desc))
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-                    .focusRequester(textFieldFocusRequester)
-                    .onFocusChanged { fieldFocused = it.isFocused },
-            )
-            // With a dummy focus target present, the sheet could steal focus automatically when it
-            // appears — explicitly request focus on the search field to guarantee the keyboard still
-            // pops up as soon as the sheet opens.
             LaunchedEffect(Unit) {
                 textFieldFocusRequester.requestFocus()
             }
-            Spacer(Modifier.height(8.dp))
 
             // The result nearest the current reading position — as soon as the list opens (whether
             // resuming a previous search's results or a fresh one), scroll to and visibly highlight
@@ -162,7 +143,7 @@ fun SearchSheet(
                 }
             }
 
-            LazyColumn(Modifier.heightIn(max = 400.dp), state = listState) {
+            LazyColumn(Modifier.weight(1f), state = listState) {
                 items(results.size) { index ->
                     val result = results[index]
                     val isNearest = index == nearestIndex
@@ -172,7 +153,7 @@ fun SearchSheet(
                             .fillMaxWidth()
                             .background(if (isNearest) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
                             .clickable { onJump(result.offset) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
                     ) {
                         Text(
                             result.snippet,
@@ -181,6 +162,7 @@ fun SearchSheet(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             formatPositionPercent(result.offset, fullTextLength),
                             style = MaterialTheme.typography.labelSmall,

@@ -1,11 +1,12 @@
 package com.moonkata.textreader.ui.reader
 
 import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -18,7 +19,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.moonkata.textreader.R
 import com.moonkata.textreader.model.SearchResult
+import com.moonkata.textreader.testutil.waitUntilTrue
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,7 +42,7 @@ import org.junit.runner.RunWith
 class SearchSheetTest {
 
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     private val application = ApplicationProvider.getApplicationContext<Application>()
     private val searchTextLabel get() = application.getString(R.string.search_field_label)
@@ -249,5 +252,33 @@ class SearchSheetTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("기존검색").assertExists()
+    }
+
+    @Test
+    fun singleBackPress_dismissesImmediately() {
+        var dismissCount = 0
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                SearchSheet(
+                    onSearch = { emptyList() },
+                    initialQuery = "",
+                    initialResults = emptyList(),
+                    currentOffset = 0,
+                    fullTextLength = 100_000,
+                    onJump = {},
+                    onDismiss = { dismissCount++ },
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Full-screen search collapses the old sheet's two-step back press (first closes the
+        // keyboard, second closes the sheet) into one — even with the field focused (keyboard up),
+        // a single back press must exit right away.
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+
+        waitUntilTrue { dismissCount == 1 }
+        assertTrue("A single back press must dismiss exactly once", dismissCount == 1)
     }
 }
